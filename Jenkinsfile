@@ -31,6 +31,11 @@ pipeline {
             defaultValue: 'testng.xml',
             description: 'TestNG suite XML file to execute'
         )
+        string(
+            name: 'EMAIL_RECIPIENTS',
+            defaultValue: '',
+            description: 'Comma-separated list of email addresses to receive the test report'
+        )
     }
 
     // ------------------------------------------------------------------
@@ -149,6 +154,54 @@ pipeline {
                     sh "[ -f \"\${WORKSPACE}/appium.pid\" ] && kill \$(cat \"\${WORKSPACE}/appium.pid\") 2>/dev/null || true"
                 } else {
                     bat "taskkill /F /FI \"WINDOWTITLE eq Appium\" /T 2>NUL || exit 0"
+                }
+
+                // Send email report if recipients are configured
+                if (params.EMAIL_RECIPIENTS?.trim()) {
+                    def buildStatus  = currentBuild.currentResult ?: 'UNKNOWN'
+                    def statusColour = buildStatus == 'SUCCESS' ? '#2ecc71' : (buildStatus == 'UNSTABLE' ? '#f39c12' : '#e74c3c')
+                    def subject      = "[Jenkins] RR Mobile Automation — ${buildStatus} — Build #${env.BUILD_NUMBER}"
+                    def body = """
+<html>
+<body style="font-family:Arial,sans-serif;font-size:14px;color:#333;">
+
+  <h2 style="color:${statusColour};">RR Mobile Automation — ${buildStatus}</h2>
+
+  <table border="0" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">
+    <tr><td><b>Job</b></td><td>${env.JOB_NAME}</td></tr>
+    <tr><td><b>Build #</b></td><td>${env.BUILD_NUMBER}</td></tr>
+    <tr><td><b>Duration</b></td><td>${currentBuild.durationString}</td></tr>
+    <tr><td><b>Branch</b></td><td>${env.GIT_BRANCH ?: 'N/A'}</td></tr>
+    <tr><td><b>Device</b></td><td>${params.DEVICE_NAME} (${params.DEVICE_UDID})</td></tr>
+    <tr><td><b>Platform</b></td><td>Android ${params.PLATFORM_VERSION}</td></tr>
+    <tr><td><b>Suite</b></td><td>${params.SUITE_FILE}</td></tr>
+  </table>
+
+  <h3>Test Summary</h3>
+  \${TEST_COUNTS, var="total"} tests run &nbsp;|&nbsp;
+  <span style="color:#2ecc71;">\${TEST_COUNTS, var="pass"} passed</span> &nbsp;|&nbsp;
+  <span style="color:#e74c3c;">\${TEST_COUNTS, var="fail"} failed</span> &nbsp;|&nbsp;
+  <span style="color:#f39c12;">\${TEST_COUNTS, var="skip"} skipped</span>
+
+  <h3>Links</h3>
+  <ul>
+    <li><a href="${env.BUILD_URL}">Build Console</a></li>
+    <li><a href="${env.BUILD_URL}testReport/">Test Report</a></li>
+    <li><a href="${env.BUILD_URL}Extent_Test_Report/">Extent HTML Report</a></li>
+  </ul>
+
+  <p style="color:#888;font-size:12px;">This email was generated automatically by Jenkins.</p>
+</body>
+</html>
+"""
+                    emailext(
+                        subject:            subject,
+                        body:               body,
+                        mimeType:           'text/html',
+                        to:                 params.EMAIL_RECIPIENTS,
+                        attachmentsPattern: 'test-output/reports/*.html',
+                        attachLog:          false
+                    )
                 }
             }
 
