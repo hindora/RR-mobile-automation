@@ -77,7 +77,7 @@ pipeline {
                         // Windows — start Appium in a detached background window
                         bat """
                             start "Appium" /B appium --port ${params.APPIUM_PORT} --log "%WORKSPACE%\\appium.log" --log-timestamp
-                            timeout /T 5 /NOBREAK > NUL
+                            powershell -Command "Start-Sleep -Seconds 5"
                         """
                     }
                 }
