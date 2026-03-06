@@ -1,0 +1,41 @@
+{
+  "validUser": {
+    "username": "sdfg",
+    "password": "Faber1234!",
+    "displayName": "sdfg",
+    "role": "standard"
+  },
+  "adminUser": {
+    "username": "admin@example.com",
+    "password": "Admin@123",
+    "displayName": "Admin User",
+    "role": "admin"
+  },
+  "invalidUser": {
+    "username": "invalid@test.com",
+    "password": "wrongpassword"
+  },
+  "emptyCredentials": {
+    "username": "",
+    "password": ""
+  },
+  "multipleUsers": [
+    {
+      "username": "user1@example.com",
+      "password": "Pass@1234",
+      "role": "standard",
+      "displayName": "User One"
+    },
+    {
+      "username": "user2@example.com",
+      "password": "Pass@5678",
+      "role": "premium",
+      "displayName": "User Two"
+    }
+  ],
+  "searchQueries": [
+    { "query": "laptop",    "expectedResults": "3" },
+    { "query": "phone",     "expectedResults": "5" },
+    { "query": "xyznotfound", "expectedResults": "0" }
+  ]
+}

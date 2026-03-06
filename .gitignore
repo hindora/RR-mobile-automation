@@ -1,3 +1,4 @@
+# Maven
 target/
 pom.xml.tag
 pom.xml.releaseBackup
@@ -7,11 +8,40 @@ release.properties
 dependency-reduced-pom.xml
 buildNumber.properties
 .mvn/timing.properties
-# https://maven.apache.org/wrapper/#usage-without-binary-jar
 .mvn/wrapper/maven-wrapper.jar
 
-# Eclipse m2e generated files
-# Eclipse Core
+# Compiled Java classes
+*.class
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Eclipse
 .project
-# JDT-specific (Eclipse Java Development Tools)
 .classpath
+.settings/
+bin/
+
+# Test output (reports, screenshots, logs)
+test-output/
+
+# APK / IPA binaries
+*.apk
+*.ipa
+*.aab
+
+# Logs
+*.log
+*.log.gz
+logs/
+
+# OS generated
+.DS_Store
+Thumbs.db
+
+# Sensitive config (optional: remove if config should be versioned)
+# src/test/resources/config/config.properties

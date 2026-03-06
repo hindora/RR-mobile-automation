@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+
+<!--
+    RR Mobile Automation – TestNG Suite Configuration
+    parallel="tests"   → each <test> block runs in a separate thread
+    thread-count="2"   → max 2 devices / parallel streams
+    Change to parallel="methods" + thread-count="N" for method-level parallelism.
+-->
+<suite name="RR Mobile Automation Suite" verbose="2" parallel="tests" thread-count="2">
+
+    <listeners>
+        <listener class-name="com.rr.mobile.listeners.TestListener"/>
+    </listeners>
+
+    <!-- ============================================================
+         Home / Navigation Tests
+         ============================================================ -->
+    <test name="Home Tests" group-by-instances="true">
+        <classes>
+            <class name="com.rr.mobile.tests.HomeTest"/>
+        </classes>
+    </test>
+
+</suite>
