@@ -38,7 +38,11 @@ pipeline {
     // ------------------------------------------------------------------
     tools {
         jdk   'JDK21'   // Configure: Manage Jenkins → Tools → JDK → name = "JDK21"
-        maven 'Maven3'  // Configure: Manage Jenkins → Tools → Maven → name = "Maven3"
+        maven 'MAVEN3'  // Configure: Manage Jenkins → Tools → Maven → name = "MAVEN3"
+    }
+
+    environment {
+        PATH = "C:\\Users\\harii\\AppData\\Roaming\\npm;${env.PATH}"
     }
 
     options {
@@ -115,13 +119,13 @@ pipeline {
                 junit allowEmptyResults: true,
                       testResults: 'target/surefire-reports/junitreports/*.xml'
 
-                // ExtentReports HTML
+                // ExtentReports HTML (filename includes timestamp, so use wildcard)
                 publishHTML([
                     allowMissing:          true,
                     alwaysLinkToLastBuild: true,
                     keepAll:               true,
-                    reportDir:             'test-output',
-                    reportFiles:           'ExtentReport.html',
+                    reportDir:             'test-output/reports',
+                    reportFiles:           '*.html',
                     reportName:            'Extent Test Report'
                 ])
             }
