@@ -29,10 +29,12 @@ bin/
 # Test output (reports, screenshots, logs)
 test-output/
 
-# APK / IPA binaries
+# APK / IPA binaries (exclude downloaded/generated ones)
 *.apk
 *.ipa
 *.aab
+# But allow test fixture APKs checked in to source control
+!src/test/resources/apps/*.apk
 
 # Logs
 *.log
