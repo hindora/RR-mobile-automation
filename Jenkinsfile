@@ -62,6 +62,12 @@ pipeline {
             }
         }
 
+        stage('Setup Appium Driver') {
+            steps {
+                bat 'appium driver install uiautomator2 || echo UIAutomator2 already installed'
+            }
+        }
+
         stage('Start Appium') {
             steps {
                 script {
