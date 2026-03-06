@@ -56,6 +56,11 @@ pipeline {
         timeout(time: 60, unit: 'MINUTES')
     }
 
+    // Automatically trigger on every GitHub push; full test run requires a manual build
+    triggers {
+        githubPush()
+    }
+
     // ------------------------------------------------------------------
     // Stages
     // ------------------------------------------------------------------
@@ -67,13 +72,28 @@ pipeline {
             }
         }
 
+        // Compile-only verification — runs on every push to catch build-break early
+        stage('Compile') {
+            steps {
+                script {
+                    if (isUnix()) {
+                        sh 'mvn clean compile -DskipTests'
+                    } else {
+                        bat 'mvn clean compile -DskipTests'
+                    }
+                }
+            }
+        }
+
         stage('Setup Appium Driver') {
+            when { not { triggeredBy 'GitHubPushCause' } }
             steps {
                 bat 'appium driver install uiautomator2 || echo UIAutomator2 already installed'
             }
         }
 
         stage('Start Appium') {
+            when { not { triggeredBy 'GitHubPushCause' } }
             steps {
                 script {
                     if (isUnix()) {
@@ -96,6 +116,7 @@ pipeline {
         }
 
         stage('Run Tests') {
+            when { not { triggeredBy 'GitHubPushCause' } }
             steps {
                 script {
                     if (isUnix()) {
@@ -122,6 +143,7 @@ pipeline {
         }
 
         stage('Publish Reports') {
+            when { not { triggeredBy 'GitHubPushCause' } }
             steps {
                 // TestNG results
                 testNG reportFilenamePattern: 'target/surefire-reports/testng-results.xml'
@@ -156,8 +178,9 @@ pipeline {
                     bat "taskkill /F /FI \"WINDOWTITLE eq Appium\" /T 2>NUL || exit 0"
                 }
 
-                // Send email report if recipients are configured
-                if (params.EMAIL_RECIPIENTS?.trim()) {
+                // Send email report only on manual builds (not GitHub push triggers)
+                def isGitHubPush = currentBuild.getBuildCauses('com.cloudbees.jenkins.GitHubPushCause').size() > 0
+                if (!isGitHubPush && params.EMAIL_RECIPIENTS?.trim()) {
                     def buildStatus  = currentBuild.currentResult ?: 'UNKNOWN'
                     def statusColour = buildStatus == 'SUCCESS' ? '#2ecc71' : (buildStatus == 'UNSTABLE' ? '#f39c12' : '#e74c3c')
                     def subject      = "[Jenkins] RR Mobile Automation — ${buildStatus} — Build #${env.BUILD_NUMBER}"
