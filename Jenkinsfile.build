@@ -1,0 +1,151 @@
+// ============================================================
+// Job 1 — RR-Build
+//
+// Purpose : Triggered on every Git push.  Compiles the project,
+//           packages all compiled classes + dependencies, and
+//           archives them so Job 2 can run tests against a
+//           specific, immutable build without re-compiling.
+//
+// Jenkins setup:
+//   • Create a Pipeline job named exactly  "RR-Build"
+//   • Set "Pipeline script from SCM", point to this repo,
+//     set Script Path = Jenkinsfile.build
+//   • Enable "GitHub hook trigger for GITScm polling"
+// ============================================================
+pipeline {
+
+    agent any
+
+    tools {
+        jdk   'JDK21'
+        maven 'MAVEN3'
+    }
+
+    options {
+        timestamps()
+        // Keep the last 20 builds so Job 2 has a meaningful
+        // history of builds to choose from.
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+        timeout(time: 30, unit: 'MINUTES')
+        // Prevent two pushes from racing each other.
+        disableConcurrentBuilds()
+    }
+
+    triggers {
+        githubPush()
+    }
+
+    stages {
+
+        // ----------------------------------------------------------
+        stage('Checkout') {
+        // ----------------------------------------------------------
+            steps {
+                checkout scm
+                script {
+                    def branch = (env.GIT_BRANCH ?: 'unknown').replaceAll('origin/', '')
+                    def commit = (env.GIT_COMMIT ?: 'unknown').take(7)
+                    // Human-readable label visible in the Build History sidebar.
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} | ${branch} | ${commit}"
+                    currentBuild.description  = "Branch: ${branch}  Commit: ${commit}"
+                    // Expose a version string for downstream use.
+                    env.BUILD_VERSION = "${branch}-b${env.BUILD_NUMBER}"
+                }
+            }
+        }
+
+        // ----------------------------------------------------------
+        stage('Compile & Package') {
+        // ----------------------------------------------------------
+        // mvn package (without -DskipTests) compiles BOTH main and
+        // test sources and runs through process-test-resources,
+        // populating:
+        //   target/classes/           ← compiled main sources
+        //   target/test-classes/      ← compiled test sources + resources
+        //   target/RR-mobile-automation-*.jar
+        //
+        // -DskipTests skips test EXECUTION only — classes are still
+        // compiled so Job 2 can run them later without recompiling.
+        // ----------------------------------------------------------
+            steps {
+                script {
+                    if (isUnix()) {
+                        sh 'mvn clean package -DskipTests'
+                    } else {
+                        bat 'mvn clean package -DskipTests'
+                    }
+                }
+            }
+        }
+
+        // ----------------------------------------------------------
+        stage('Resolve Dependencies') {
+        // ----------------------------------------------------------
+        // Copies every runtime + test-scoped dependency JAR into
+        // target/dependency/.  Job 2 can use these JARs directly
+        // via Maven's offline mode (-o), avoiding any network calls
+        // even on a fresh agent.
+        // ----------------------------------------------------------
+            steps {
+                script {
+                    if (isUnix()) {
+                        sh '''
+                            mvn dependency:copy-dependencies \
+                                -DoutputDirectory=target/dependency \
+                                -DincludeScope=test
+                        '''
+                    } else {
+                        bat '''
+                            mvn dependency:copy-dependencies ^
+                                -DoutputDirectory=target/dependency ^
+                                -DincludeScope=test
+                        '''
+                    }
+                }
+            }
+        }
+
+        // ----------------------------------------------------------
+        stage('Archive Artifacts') {
+        // ----------------------------------------------------------
+        // Everything Job 2 needs to execute the test suite:
+        //   • target/classes/         main compiled classes
+        //   • target/test-classes/    test compiled classes + resources
+        //   • target/dependency/      all dependency JARs
+        //   • pom.xml                 project model (Surefire config)
+        //   • testng.xml              default suite descriptor
+        //   • src/test/resources/     raw config / APKs / test-data
+        //                            (also embedded in test-classes,
+        //                             archived separately as fallback)
+        //
+        // fingerprint: true lets Jenkins track which build was used
+        // when Job 2 copies these artifacts.
+        // ----------------------------------------------------------
+            steps {
+                archiveArtifacts(
+                    artifacts: [
+                        'target/classes/**',
+                        'target/test-classes/**',
+                        'target/dependency/**',
+                        'pom.xml',
+                        'testng.xml',
+                        'src/test/resources/**'
+                    ].join(','),
+                    fingerprint:       true,
+                    allowEmptyArchive: false
+                )
+                echo "Build ${env.BUILD_VERSION} archived — ready for the Automation Job."
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Build #${env.BUILD_NUMBER} (${env.BUILD_VERSION}) packaged successfully. " +
+                 "Open the Automation Job and select this build number to run tests."
+        }
+        failure {
+            echo "Build #${env.BUILD_NUMBER} FAILED. Fix compilation errors before triggering the Automation Job."
+        }
+    }
+}

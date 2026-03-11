@@ -1,0 +1,301 @@
+// ============================================================
+// Job 2 — RR-Automation
+//
+// Purpose : Manual-only job.  The user picks a specific build
+//           from Job 1 (RR-Build), copies its pre-compiled
+//           artifacts, then runs the full Appium / TestNG suite
+//           against a real Android device — without rebuilding
+//           the project from source.
+//
+// Jenkins setup:
+//   • Install the  "Copy Artifact"  plugin
+//       Manage Jenkins → Plugins → Available → Copy Artifact
+//   • Create a Pipeline job named  "RR-Automation"
+//   • Set "Pipeline script from SCM", Script Path = Jenkinsfile.automation
+//   • In the RR-Build job → Configure → enable
+//       "Allow builds to copy artifacts from this project"
+//   • No trigger — manual execution only.
+// ============================================================
+pipeline {
+
+    agent any
+
+    // ------------------------------------------------------------------
+    // Parameters
+    // ------------------------------------------------------------------
+    parameters {
+
+        // buildSelector renders a dropdown in the Jenkins "Build with
+        // Parameters" screen listing every available build from RR-Build.
+        // The user picks the exact version they want to test against.
+        // Requires the Copy Artifact plugin.
+        buildSelector(
+            name:            'BUILD_SELECTOR',
+            description:     'Pick the RR-Build build whose artifacts you want to run tests against.',
+            defaultSelector: lastSuccessful()
+        )
+
+        string(
+            name:         'DEVICE_UDID',
+            defaultValue: 'adb-R5CRA1JVYWL-3TRgFc._adb-tls-connect._tcp',
+            description:  'ADB device UDID — run: adb devices'
+        )
+        string(
+            name:         'DEVICE_NAME',
+            defaultValue: 'Galaxy s21',
+            description:  'Friendly device name used in Appium capabilities'
+        )
+        string(
+            name:         'PLATFORM_VERSION',
+            defaultValue: '12',
+            description:  'Android OS version on the device'
+        )
+        string(
+            name:         'APPIUM_PORT',
+            defaultValue: '4723',
+            description:  'Port the Appium server listens on'
+        )
+        string(
+            name:         'SUITE_FILE',
+            defaultValue: 'testng.xml',
+            description:  'TestNG suite XML file to execute'
+        )
+        string(
+            name:         'EMAIL_RECIPIENTS',
+            defaultValue: '',
+            description:  'Comma-separated list of email addresses to receive the test report'
+        )
+    }
+
+    tools {
+        jdk   'JDK21'
+        maven 'MAVEN3'
+    }
+
+    environment {
+        PATH = "C:\\Users\\harii\\AppData\\Roaming\\npm;${env.PATH}"
+    }
+
+    options {
+        timestamps()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 60, unit: 'MINUTES')
+    }
+
+    // No githubPush() trigger — this job is always started manually.
+
+    stages {
+
+        // ----------------------------------------------------------
+        stage('Copy Build Artifacts') {
+        // ----------------------------------------------------------
+        // Fetches the compiled classes, dependency JARs, POM, suite
+        // descriptor, and test resources from the chosen RR-Build
+        // build number.  No git checkout, no Maven compile.
+        //
+        // After this step, COPYARTIFACT_BUILD_NUMBER_RR_Build
+        // holds the resolved build number (useful even when
+        // "lastSuccessful" was selected).
+        // ----------------------------------------------------------
+            steps {
+                script {
+                    copyArtifact(
+                        projectName:        'RR-Build',
+                        selector:           buildParameter('BUILD_SELECTOR'),
+                        filter:             [
+                            'target/classes/**',
+                            'target/test-classes/**',
+                            'target/dependency/**',
+                            'pom.xml',
+                            'testng.xml',
+                            'src/test/resources/**'
+                        ].join(','),
+                        fingerprintArtifacts: true,
+                        // Flatten disabled — preserve the directory structure
+                        // exactly as archived by Job 1.
+                        flatten: false
+                    )
+
+                    // COPYARTIFACT_BUILD_NUMBER_RR_Build is set by the plugin.
+                    def sourceBuild = env.COPYARTIFACT_BUILD_NUMBER_RR_Build ?: 'unknown'
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} ← RR-Build #${sourceBuild}"
+                    currentBuild.description  = "Testing artifacts from RR-Build #${sourceBuild}"
+                    echo "Artifacts copied from RR-Build #${sourceBuild}"
+                }
+            }
+        }
+
+        // ----------------------------------------------------------
+        stage('Setup Appium Driver') {
+        // ----------------------------------------------------------
+            steps {
+                script {
+                    // returnStatus: true prevents a non-zero exit code
+                    // (e.g. "driver already installed") from failing
+                    // the build.  Windows CMD echo does not reset
+                    // ERRORLEVEL, so we capture the code in Groovy instead.
+                    def result = bat returnStatus: true,
+                                     script: 'appium driver install uiautomator2'
+                    if (result != 0) {
+                        echo 'UIAutomator2 driver already installed — continuing.'
+                    }
+                }
+            }
+        }
+
+        // ----------------------------------------------------------
+        stage('Start Appium') {
+        // ----------------------------------------------------------
+            steps {
+                script {
+                    if (isUnix()) {
+                        sh """
+                            nohup appium --port ${params.APPIUM_PORT} \
+                                --log "\${WORKSPACE}/appium.log" \
+                                --log-timestamp &
+                            echo \$! > "\${WORKSPACE}/appium.pid"
+                            sleep 5
+                        """
+                    } else {
+                        bat """
+                            start "Appium" /B appium --port ${params.APPIUM_PORT} --log "%WORKSPACE%\\appium.log" --log-timestamp
+                            powershell -Command "Start-Sleep -Seconds 5"
+                        """
+                    }
+                }
+            }
+        }
+
+        // ----------------------------------------------------------
+        stage('Run Tests') {
+        // ----------------------------------------------------------
+        // Uses  mvn surefire:test  — a direct plugin goal invocation
+        // that bypasses the compile lifecycle entirely.  Maven reads
+        // the classpath from pom.xml and uses the pre-compiled classes
+        // already in target/classes and target/test-classes (copied
+        // from Job 1) together with dependencies from the local Maven
+        // cache.
+        //
+        // The -o (offline) flag forces Maven to use only the local
+        // cache, guaranteeing the exact same dependency versions that
+        // were used when Job 1 compiled the code.  If offline mode
+        // causes issues (e.g. a fresh agent with an empty cache),
+        // remove -o — Maven will resolve from the network instead.
+        // ----------------------------------------------------------
+            steps {
+                script {
+                    if (isUnix()) {
+                        sh """
+                            mvn surefire:test -o \
+                                -Dsurefire.suiteXmlFiles=${params.SUITE_FILE} \
+                                "-Ddevice.udid=${params.DEVICE_UDID}" \
+                                "-Ddevice.name=${params.DEVICE_NAME}" \
+                                -Dplatform.version=${params.PLATFORM_VERSION} \
+                                -Dappium.server.url=http://127.0.0.1:${params.APPIUM_PORT}
+                        """
+                    } else {
+                        bat """
+                            mvn surefire:test -o ^
+                                -Dsurefire.suiteXmlFiles=${params.SUITE_FILE} ^
+                                "-Ddevice.udid=${params.DEVICE_UDID}" ^
+                                "-Ddevice.name=${params.DEVICE_NAME}" ^
+                                -Dplatform.version=${params.PLATFORM_VERSION} ^
+                                -Dappium.server.url=http://127.0.0.1:${params.APPIUM_PORT}
+                        """
+                    }
+                }
+            }
+        }
+
+        // ----------------------------------------------------------
+        stage('Publish Reports') {
+        // ----------------------------------------------------------
+            steps {
+                // TestNG results (requires TestNG Results Plugin)
+                testNG reportFilenamePattern: 'target/surefire-reports/testng-results.xml'
+
+                // JUnit-compatible XML (populates Jenkins test trend graphs)
+                junit allowEmptyResults: true,
+                      testResults: 'target/surefire-reports/junitreports/*.xml'
+
+                // ExtentReports HTML
+                publishHTML([
+                    allowMissing:          true,
+                    alwaysLinkToLastBuild: true,
+                    keepAll:               true,
+                    reportDir:             'test-output/reports',
+                    reportFiles:           '*.html',
+                    reportName:            'Extent Test Report'
+                ])
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Post-build
+    // ------------------------------------------------------------------
+    post {
+        always {
+            script {
+                // Stop the Appium server regardless of test outcome.
+                if (isUnix()) {
+                    sh "[ -f \"\${WORKSPACE}/appium.pid\" ] && kill \$(cat \"\${WORKSPACE}/appium.pid\") 2>/dev/null || true"
+                } else {
+                    bat "taskkill /F /FI \"WINDOWTITLE eq Appium\" /T 2>NUL || exit 0"
+                }
+
+                // Send an HTML email report for manual builds when
+                // a recipient list is provided.
+                if (params.EMAIL_RECIPIENTS?.trim()) {
+                    def buildStatus  = currentBuild.currentResult ?: 'UNKNOWN'
+                    def statusColour = buildStatus == 'SUCCESS'
+                        ? '#2ecc71'
+                        : (buildStatus == 'UNSTABLE' ? '#f39c12' : '#e74c3c')
+                    def sourceBuild  = env.COPYARTIFACT_BUILD_NUMBER_RR_Build ?: 'N/A'
+
+                    emailext(
+                        subject: "[Jenkins] RR Automation — ${buildStatus} — Build #${env.BUILD_NUMBER} (artifacts from RR-Build #${sourceBuild})",
+                        mimeType: 'text/html',
+                        to: params.EMAIL_RECIPIENTS,
+                        attachmentsPattern: 'test-output/reports/*.html',
+                        attachLog: false,
+                        body: """
+<html>
+<body style="font-family:Arial,sans-serif;font-size:14px;color:#333;">
+  <h2 style="color:${statusColour};">RR Mobile Automation — ${buildStatus}</h2>
+  <table border="0" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">
+    <tr><td><b>Automation Job</b></td><td>${env.JOB_NAME} #${env.BUILD_NUMBER}</td></tr>
+    <tr><td><b>Artifacts from</b></td><td>RR-Build #${sourceBuild}</td></tr>
+    <tr><td><b>Duration</b></td><td>${currentBuild.durationString}</td></tr>
+    <tr><td><b>Device</b></td><td>${params.DEVICE_NAME} (${params.DEVICE_UDID})</td></tr>
+    <tr><td><b>Platform</b></td><td>Android ${params.PLATFORM_VERSION}</td></tr>
+    <tr><td><b>Suite</b></td><td>${params.SUITE_FILE}</td></tr>
+  </table>
+  <h3>Links</h3>
+  <ul>
+    <li><a href="${env.BUILD_URL}">Build Console</a></li>
+    <li><a href="${env.BUILD_URL}testReport/">Test Report</a></li>
+    <li><a href="${env.BUILD_URL}Extent_Test_Report/">Extent HTML Report</a></li>
+  </ul>
+  <p style="color:#888;font-size:12px;">Generated automatically by Jenkins.</p>
+</body>
+</html>"""
+                    )
+                }
+            }
+
+            archiveArtifacts artifacts: 'test-output/screenshots/**/*.png',
+                              allowEmptyArchive: true
+            archiveArtifacts artifacts: 'appium.log',
+                              allowEmptyArchive: true
+        }
+
+        success {
+            echo 'All tests passed.'
+        }
+
+        failure {
+            echo 'Tests failed — check the Extent Report and screenshots above.'
+        }
+    }
+}
