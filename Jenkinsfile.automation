@@ -25,14 +25,16 @@ pipeline {
     // ------------------------------------------------------------------
     parameters {
 
-        // buildSelector renders a dropdown in the Jenkins "Build with
-        // Parameters" screen listing every available build from RR-Mobile-Build.
-        // The user picks the exact version they want to test against.
-        // Requires the Copy Artifact plugin.
-        buildSelector(
-            name:            'BUILD_SELECTOR',
-            description:     'Pick the RR-Mobile-Build build whose artifacts you want to run tests against.',
-            defaultSelector: lastSuccessful()
+        // "run" is a native Jenkins parameter type — no extra plugin needed.
+        // It renders a dropdown listing real builds from RR-Mobile-Build,
+        // filtered to SUCCESS only, so testers can only pick a green build.
+        // params.BUILD_SELECTOR resolves to the full URL of the chosen build,
+        // e.g. http://jenkins/job/RR-Mobile-Build/5/
+        run(
+            name:        'BUILD_SELECTOR',
+            description: 'Select the RR-Mobile-Build build whose artifacts you want to run tests against.',
+            projectName: 'RR-Mobile-Build',
+            filter:      'SUCCESS'
         )
 
         string(
@@ -89,20 +91,27 @@ pipeline {
         // ----------------------------------------------------------
         stage('Copy Build Artifacts') {
         // ----------------------------------------------------------
-        // Fetches the compiled classes, dependency JARs, POM, suite
-        // descriptor, and test resources from the chosen RR-Mobile-Build
-        // build number.  No git checkout, no Maven compile.
-        //
-        // After this step, COPYARTIFACT_BUILD_NUMBER_RR_Mobile_Build
-        // holds the resolved build number (useful even when
-        // "lastSuccessful" was selected).
+        // Extracts the build number from the "run" parameter URL, then
+        // uses the Copy Artifact plugin to fetch the compiled classes,
+        // dependency JARs, POM, suite descriptor, and test resources
+        // from that exact RR-Mobile-Build build.
+        // No git checkout, no Maven compile happens here.
         // ----------------------------------------------------------
             steps {
                 script {
+                    // params.BUILD_SELECTOR = "http://jenkins/job/RR-Mobile-Build/5/"
+                    // Strip any trailing slash, then take the last path segment.
+                    def sourceBuild = params.BUILD_SELECTOR
+                                          .replaceAll('/+$', '')
+                                          .tokenize('/')
+                                          .last()
+                    // Expose it for the post block (email, display name).
+                    env.SOURCE_BUILD_NUMBER = sourceBuild
+
                     copyArtifact(
-                        projectName:        'RR-Mobile-Build',
-                        selector:           buildParameter('BUILD_SELECTOR'),
-                        filter:             [
+                        projectName:          'RR-Mobile-Build',
+                        selector:             specific(sourceBuild),
+                        filter:               [
                             'target/classes/**',
                             'target/test-classes/**',
                             'target/dependency/**',
@@ -111,14 +120,11 @@ pipeline {
                             'src/test/resources/**'
                         ].join(','),
                         fingerprintArtifacts: true,
-                        // Flatten disabled — preserve the directory structure
-                        // exactly as archived by Job 1.
-                        flatten: false
+                        // Preserve directory structure exactly as archived by Job 1.
+                        flatten:              false
                     )
 
-                    // COPYARTIFACT_BUILD_NUMBER_RR_Mobile_Build is set by the plugin.
-                    def sourceBuild = env.COPYARTIFACT_BUILD_NUMBER_RR_Mobile_Build ?: 'unknown'
-                    currentBuild.displayName = "#${env.BUILD_NUMBER} ← RR-Mobile-Build #${sourceBuild}"
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} \u2190 RR-Mobile-Build #${sourceBuild}"
                     currentBuild.description  = "Testing artifacts from RR-Mobile-Build #${sourceBuild}"
                     echo "Artifacts copied from RR-Mobile-Build #${sourceBuild}"
                 }
@@ -244,25 +250,24 @@ pipeline {
                     bat "taskkill /F /FI \"WINDOWTITLE eq Appium\" /T 2>NUL || exit 0"
                 }
 
-                // Send an HTML email report for manual builds when
-                // a recipient list is provided.
+                // Send an HTML email report when a recipient list is provided.
                 if (params.EMAIL_RECIPIENTS?.trim()) {
                     def buildStatus  = currentBuild.currentResult ?: 'UNKNOWN'
                     def statusColour = buildStatus == 'SUCCESS'
                         ? '#2ecc71'
                         : (buildStatus == 'UNSTABLE' ? '#f39c12' : '#e74c3c')
-                    def sourceBuild  = env.COPYARTIFACT_BUILD_NUMBER_RR_Mobile_Build ?: 'N/A'
+                    def sourceBuild  = env.SOURCE_BUILD_NUMBER ?: 'N/A'
 
                     emailext(
-                        subject: "[Jenkins] RR Automation — ${buildStatus} — Build #${env.BUILD_NUMBER} (artifacts from RR-Mobile-Build #${sourceBuild})",
-                        mimeType: 'text/html',
-                        to: params.EMAIL_RECIPIENTS,
+                        subject:            "[Jenkins] RR Mobile Automation \u2014 ${buildStatus} \u2014 Build #${env.BUILD_NUMBER} (artifacts from RR-Mobile-Build #${sourceBuild})",
+                        mimeType:           'text/html',
+                        to:                 params.EMAIL_RECIPIENTS,
                         attachmentsPattern: 'test-output/reports/*.html',
-                        attachLog: false,
+                        attachLog:          false,
                         body: """
 <html>
 <body style="font-family:Arial,sans-serif;font-size:14px;color:#333;">
-  <h2 style="color:${statusColour};">RR Mobile Automation — ${buildStatus}</h2>
+  <h2 style="color:${statusColour};">RR Mobile Automation \u2014 ${buildStatus}</h2>
   <table border="0" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">
     <tr><td><b>Automation Job</b></td><td>${env.JOB_NAME} #${env.BUILD_NUMBER}</td></tr>
     <tr><td><b>Artifacts from</b></td><td>RR-Mobile-Build #${sourceBuild}</td></tr>
