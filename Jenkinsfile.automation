@@ -193,25 +193,30 @@ pipeline {
         // remove -o — Maven will resolve from the network instead.
         // ----------------------------------------------------------
             steps {
-                script {
-                    if (isUnix()) {
-                        sh """
-                            mvn surefire:test -o \
-                                -Dsurefire.suiteXmlFiles=${params.SUITE_FILE} \
-                                "-Ddevice.udid=${params.DEVICE_UDID}" \
-                                "-Ddevice.name=${params.DEVICE_NAME}" \
-                                -Dplatform.version=${params.PLATFORM_VERSION} \
-                                -Dappium.server.url=http://127.0.0.1:${params.APPIUM_PORT}
-                        """
-                    } else {
-                        bat """
-                            mvn surefire:test -o ^
-                                -Dsurefire.suiteXmlFiles=${params.SUITE_FILE} ^
-                                "-Ddevice.udid=${params.DEVICE_UDID}" ^
-                                "-Ddevice.name=${params.DEVICE_NAME}" ^
-                                -Dplatform.version=${params.PLATFORM_VERSION} ^
-                                -Dappium.server.url=http://127.0.0.1:${params.APPIUM_PORT}
-                        """
+                // catchError lets test failures mark the build UNSTABLE instead of
+                // FAILED so the Publish Reports stage always runs and results are
+                // always visible in Jenkins — even when tests fail.
+                catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                    script {
+                        if (isUnix()) {
+                            sh """
+                                mvn surefire:test -o \
+                                    -Dsurefire.suiteXmlFiles=${params.SUITE_FILE} \
+                                    "-Ddevice.udid=${params.DEVICE_UDID}" \
+                                    "-Ddevice.name=${params.DEVICE_NAME}" \
+                                    -Dplatform.version=${params.PLATFORM_VERSION} \
+                                    -Dappium.server.url=http://127.0.0.1:${params.APPIUM_PORT}
+                            """
+                        } else {
+                            bat """
+                                mvn surefire:test -o ^
+                                    -Dsurefire.suiteXmlFiles=${params.SUITE_FILE} ^
+                                    "-Ddevice.udid=${params.DEVICE_UDID}" ^
+                                    "-Ddevice.name=${params.DEVICE_NAME}" ^
+                                    -Dplatform.version=${params.PLATFORM_VERSION} ^
+                                    -Dappium.server.url=http://127.0.0.1:${params.APPIUM_PORT}
+                            """
+                        }
                     }
                 }
             }
@@ -220,15 +225,38 @@ pipeline {
         // ----------------------------------------------------------
         stage('Publish Reports') {
         // ----------------------------------------------------------
+        // Always runs because Run Tests uses catchError (UNSTABLE)
+        // rather than letting a non-zero exit skip downstream stages.
+        // ----------------------------------------------------------
             steps {
-                // TestNG results (requires TestNG Results Plugin)
-                testNG reportFilenamePattern: 'target/surefire-reports/testng-results.xml'
+                // ── TestNG Results (requires "TestNG Results" plugin) ────────
+                // Renders a full suite/test/class/method breakdown with pass,
+                // fail, skip counts, durations, stack traces, and a historical
+                // trend chart across builds.
+                testNG(
+                    reportFilenamePattern:        'target/surefire-reports/testng-results.xml',
+                    // Render HTML tags in test descriptions and exception messages
+                    escapeTestDescp:              false,
+                    escapeExceptionMsg:           false,
+                    // Show red bars for failed builds in the trend graph
+                    showFailedBuildsInTrendGraph: true,
+                    // Don't mark UNSTABLE just because tests were skipped
+                    unstableOnSkippedTests:       false,
+                    // Mark build UNSTABLE (not FAILED) when tests fail —
+                    // keeps the pipeline non-blocking for further reporting
+                    failedFails:                  1,
+                    unstableFails:                0
+                )
 
-                // JUnit-compatible XML (populates Jenkins test trend graphs)
+                // ── JUnit XML ────────────────────────────────────────────────
+                // Feeds Jenkins' built-in "Test Result Trend" graph on the job
+                // home page and the per-build "Test Results" page.
                 junit allowEmptyResults: true,
-                      testResults: 'target/surefire-reports/junitreports/*.xml'
+                      testResults:       'target/surefire-reports/junitreports/*.xml'
 
-                // ExtentReports HTML
+                // ── ExtentReports HTML ────────────────────────────────────────
+                // Beautiful dark-themed HTML report with screenshots on failure,
+                // system info, and per-test log. Link appears in the left sidebar.
                 publishHTML([
                     allowMissing:          true,
                     alwaysLinkToLastBuild: true,
