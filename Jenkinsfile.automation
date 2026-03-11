@@ -132,7 +132,7 @@ pipeline {
                     // The Copy Artifact plugin sets this env var to the actual build
                     // number that was copied — use it so "last successful" resolves
                     // to a real number in the display name and email.
-                    def actualBuild = env.COPYARTIFACT_BUILD_NUMBER_RR_Mobile_Build ?: 'unknown'
+                    def actualBuild = env.COPYARTIFACT_BUILD_NUMBER_RR_Mobile_Builds ?: 'unknown'
                     env.SOURCE_BUILD_NUMBER = actualBuild
 
                     currentBuild.displayName = "#${env.BUILD_NUMBER} \u2190 RR-Mobile-Builds #${actualBuild}"
