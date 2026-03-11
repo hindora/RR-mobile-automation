@@ -97,18 +97,25 @@ pipeline {
         // ----------------------------------------------------------
             steps {
                 script {
-                    // params.BUILD_SELECTOR = "http://jenkins/job/RR-Mobile-Build/5/"
-                    // Strip any trailing slash, then take the last path segment.
-                    def sourceBuild = params.BUILD_SELECTOR
-                                          .replaceAll('/+$', '')
-                                          .tokenize('/')
-                                          .last()
-                    // Expose it for the post block (email, display name).
-                    env.SOURCE_BUILD_NUMBER = sourceBuild
+                    // Determine which build to copy from.
+                    // params.BUILD_SELECTOR is null when the run-parameter dropdown
+                    // has no builds yet — fall back to lastSuccessful() in that case.
+                    def selector
+                    if (params.BUILD_SELECTOR) {
+                        // Value looks like: "http://jenkins/job/RR-Mobile-Build/5/"
+                        // Strip trailing slash, take the last path segment as build number.
+                        def pickedNumber = params.BUILD_SELECTOR
+                                               .replaceAll('/+$', '')
+                                               .tokenize('/')
+                                               .last()
+                        selector = specific(pickedNumber)
+                    } else {
+                        selector = lastSuccessful()
+                    }
 
                     copyArtifact(
                         projectName:          'RR-Mobile-Build',
-                        selector:             specific(sourceBuild),
+                        selector:             selector,
                         filter:               [
                             'target/classes/**',
                             'target/test-classes/**',
@@ -122,9 +129,15 @@ pipeline {
                         flatten:              false
                     )
 
-                    currentBuild.displayName = "#${env.BUILD_NUMBER} \u2190 RR-Mobile-Build #${sourceBuild}"
-                    currentBuild.description  = "Testing artifacts from RR-Mobile-Build #${sourceBuild}"
-                    echo "Artifacts copied from RR-Mobile-Build #${sourceBuild}"
+                    // The Copy Artifact plugin sets this env var to the actual build
+                    // number that was copied — use it so "last successful" resolves
+                    // to a real number in the display name and email.
+                    def actualBuild = env.COPYARTIFACT_BUILD_NUMBER_RR_Mobile_Build ?: 'unknown'
+                    env.SOURCE_BUILD_NUMBER = actualBuild
+
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} \u2190 RR-Mobile-Build #${actualBuild}"
+                    currentBuild.description  = "Testing artifacts from RR-Mobile-Build #${actualBuild}"
+                    echo "Artifacts copied from RR-Mobile-Build #${actualBuild}"
                 }
             }
         }
