@@ -124,9 +124,9 @@ pipeline {
                 )
 
                 script {
-                    // COPYARTIFACT_BUILD_NUMBER_RR_Mobile_Builds is set by the plugin
-                    // with the resolved build number (especially useful for lastSuccessful).
-                    def actualBuild = env.COPYARTIFACT_BUILD_NUMBER_RR_Mobile_Builds ?: env.SOURCE_BUILD_NUMBER
+                    // Jenkins EnvVars.toEnvName() uppercases the job name, so the plugin
+                    // sets COPYARTIFACT_BUILD_NUMBER_RR_MOBILE_BUILDS (all caps).
+                    def actualBuild = env.COPYARTIFACT_BUILD_NUMBER_RR_MOBILE_BUILDS ?: env.SOURCE_BUILD_NUMBER
                     env.SOURCE_BUILD_NUMBER = actualBuild
                     currentBuild.displayName = "#${env.BUILD_NUMBER} \u2190 RR-Mobile-Builds #${actualBuild}"
                     currentBuild.description  = "Testing artifacts from RR-Mobile-Builds #${actualBuild}"
@@ -260,23 +260,30 @@ pipeline {
                 // a mostly-green run is not penalised for a small number of
                 // failures.
                 script {
+                    // XmlSlurper is blocked by the Jenkins Groovy Sandbox.
+                    // Read the root element attributes with regex instead — no
+                    // new class instantiation required, always sandbox-safe.
                     def xmlFile = 'target/surefire-reports/testng-results.xml'
                     if (fileExists(xmlFile)) {
-                        def xml    = new XmlSlurper().parseText(readFile(xmlFile))
-                        def passed = xml.@passed.toInteger()
-                        def total  = xml.@total.toInteger()
-                        if (total > 0) {
-                            double passRate = (passed * 100.0) / total
-                            String pct = String.format('%.1f', passRate)
-                            if (passRate >= 80.0) {
-                                currentBuild.result = 'SUCCESS'
-                                echo "Pass rate ${pct}% (${passed}/${total}) ≥ 80% — build SUCCESS"
+                        def content       = readFile(xmlFile)
+                        def passedMatcher = (content =~ /passed="(\d+)"/)
+                        def totalMatcher  = (content =~ /total="(\d+)"/)
+                        if (passedMatcher && totalMatcher) {
+                            int passed  = passedMatcher[0][1].toInteger()
+                            int total   = totalMatcher[0][1].toInteger()
+                            if (total > 0) {
+                                double passRate = (passed * 100.0) / total
+                                String pct = String.format('%.1f', passRate)
+                                if (passRate >= 80.0) {
+                                    currentBuild.result = 'SUCCESS'
+                                    echo "Pass rate ${pct}% (${passed}/${total}) ≥ 80% — build SUCCESS"
+                                } else {
+                                    currentBuild.result = 'UNSTABLE'
+                                    echo "Pass rate ${pct}% (${passed}/${total}) < 80% — build UNSTABLE"
+                                }
                             } else {
-                                currentBuild.result = 'UNSTABLE'
-                                echo "Pass rate ${pct}% (${passed}/${total}) < 80% — build UNSTABLE"
+                                echo 'No tests in testng-results.xml — build result unchanged.'
                             }
-                        } else {
-                            echo 'No tests in testng-results.xml — build result unchanged.'
                         }
                     } else {
                         echo 'testng-results.xml not found — build result unchanged.'
