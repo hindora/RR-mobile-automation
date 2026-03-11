@@ -91,6 +91,7 @@ public final class ExtentReportManager {
         new File(FrameworkConfig.REPORT_DIR).mkdirs();
 
         ExtentSparkReporter spark = new ExtentSparkReporter(reportPath);
+        spark.config().setOfflineMode(true);
         spark.config().setTheme(Theme.DARK);
         spark.config().setDocumentTitle("RR Mobile Automation");
         spark.config().setReportName("Android Test Execution Report");
