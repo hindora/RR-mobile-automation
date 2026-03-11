@@ -21,7 +21,6 @@
         <!-- Dependency Versions -->
         <appium.java.client.version>8.6.0</appium.java.client.version>
         <testng.version>7.9.0</testng.version>
-        <extentreports.version>5.1.1</extentreports.version>
         <log4j.version>2.22.1</log4j.version>
         <jackson.version>2.16.1</jackson.version>
         <commons.io.version>2.15.1</commons.io.version>
@@ -51,13 +50,6 @@
             <groupId>org.testng</groupId>
             <artifactId>testng</artifactId>
             <version>${testng.version}</version>
-        </dependency>
-
-        <!-- ExtentReports -->
-        <dependency>
-            <groupId>com.aventstack</groupId>
-            <artifactId>extentreports</artifactId>
-            <version>${extentreports.version}</version>
         </dependency>
 
         <!-- Log4j2 API -->

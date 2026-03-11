@@ -1,10 +1,6 @@
 package com.rr.mobile.listeners;
 
-import com.aventstack.extentreports.ExtentTest;
-import com.aventstack.extentreports.MediaEntityBuilder;
-import com.aventstack.extentreports.Status;
 import com.rr.mobile.driver.DriverManager;
-import com.rr.mobile.reporting.ExtentReportManager;
 import com.rr.mobile.utils.ScreenshotUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -20,9 +16,9 @@ import java.util.Collection;
  * TestNG listener wired into testng.xml and @Listeners on BaseTest.
  *
  * Responsibilities:
- *  1. Create / close ExtentTest nodes per test method.
- *  2. Capture a screenshot and attach it to the report on failure.
- *  3. Flush the report at suite completion.
+ *  1. Log test lifecycle events via Log4j.
+ *  2. Capture a screenshot and embed it in the TestNG reporter on failure.
+ *  3. Inject a pass-rate summary into every test result at suite completion.
  */
 public class TestListener implements ITestListener {
 
@@ -50,14 +46,6 @@ public class TestListener implements ITestListener {
 
         log.info("====== Suite finished: {} | Passed: {} | Failed: {} | Skipped: {} | Pass Rate: {} ======",
             context.getName(), passed, failed, skipped, passRate);
-
-        // Populate the "Environment" table in ExtentReports with suite-level stats
-        ExtentReportManager.getInstance().setSystemInfo("Pass Rate",   passRate);
-        ExtentReportManager.getInstance().setSystemInfo("Passed",      String.valueOf(passed));
-        ExtentReportManager.getInstance().setSystemInfo("Failed",      String.valueOf(failed));
-        ExtentReportManager.getInstance().setSystemInfo("Skipped",     String.valueOf(skipped));
-        ExtentReportManager.getInstance().setSystemInfo("Total Tests", String.valueOf(total));
-        ExtentReportManager.flushReport();
 
         // Inject pass-rate summary into every test result's reporter output so it
         // appears on the Jenkins TestNG Results plugin method-detail page.
@@ -87,19 +75,12 @@ public class TestListener implements ITestListener {
 
     @Override
     public void onTestStart(ITestResult result) {
-        String name = result.getMethod().getMethodName();
-        String desc = result.getMethod().getDescription();
-        log.info("---> TEST START: {}", name);
-        ExtentReportManager.createTest(name, desc);
+        log.info("---> TEST START: {}", result.getMethod().getMethodName());
     }
 
     @Override
     public void onTestSuccess(ITestResult result) {
         log.info("---> TEST PASS:  {}", result.getMethod().getMethodName());
-        ExtentTest test = ExtentReportManager.getTest();
-        if (test != null) {
-            test.pass("Test passed");
-        }
     }
 
     @Override
@@ -108,25 +89,13 @@ public class TestListener implements ITestListener {
         log.error("---> TEST FAIL:  {} | {}", name,
             result.getThrowable() != null ? result.getThrowable().getMessage() : "unknown");
 
-        ExtentTest test = ExtentReportManager.getTest();
-        if (test != null) {
-            test.fail(result.getThrowable());
-            attachScreenshotToReport(test, name);
-        }
-        // Always save a file copy for later inspection
+        attachScreenshotToReporter(result, name);
         ScreenshotUtils.captureScreenshot(name);
     }
 
     @Override
     public void onTestSkipped(ITestResult result) {
-        String name = result.getMethod().getMethodName();
-        log.warn("---> TEST SKIP:  {}", name);
-        ExtentTest test = ExtentReportManager.getTest();
-        if (test != null) {
-            String reason = result.getThrowable() != null
-                ? result.getThrowable().getMessage() : "No reason provided";
-            test.skip("Test skipped: " + reason);
-        }
+        log.warn("---> TEST SKIP:  {}", result.getMethod().getMethodName());
     }
 
     @Override
@@ -145,7 +114,7 @@ public class TestListener implements ITestListener {
         }
     }
 
-    private void attachScreenshotToReport(ExtentTest test, String testName) {
+    private void attachScreenshotToReporter(ITestResult result, String testName) {
         if (!DriverManager.isDriverActive()) {
             return;
         }
@@ -153,16 +122,13 @@ public class TestListener implements ITestListener {
             byte[] bytes = ScreenshotUtils.captureScreenshotAsBytes();
             if (bytes.length > 0) {
                 String base64 = Base64.getEncoder().encodeToString(bytes);
-                // Attach to ExtentReports (Spark HTML report)
-                test.fail("Screenshot at failure",
-                    MediaEntityBuilder.createScreenCaptureFromBase64String(base64).build());
-                // Embed in testng-results.xml so Jenkins TestNG Results plugin shows the screenshot
+                Reporter.setCurrentTestResult(result);
                 Reporter.log("<br/><b>Failure Screenshot:</b><br/>" +
                     "<img src='data:image/png;base64," + base64 +
                     "' style='max-width:900px;border:2px solid #e74c3c;'/><br/>", true);
             }
         } catch (Exception e) {
-            log.error("Could not attach screenshot to report: {}", e.getMessage());
+            log.error("Could not attach screenshot to reporter: {}", e.getMessage());
         }
     }
 }

@@ -13,7 +13,6 @@ public final class FrameworkConfig {
     public static final String CONFIG_FILE_PATH   = "src/test/resources/config/config.properties";
     public static final String TEST_DATA_DIR      = "src/test/resources/testdata/";
     public static final String SCREENSHOT_DIR     = "test-output/screenshots/";
-    public static final String REPORT_DIR         = "test-output/reports/";
     public static final String LOG_DIR            = "test-output/logs/";
 
     // ---------------------------------------------------------------

@@ -51,7 +51,7 @@ public final class ScreenshotUtils {
 
     /**
      * Captures a screenshot and returns it as a raw byte array.
-     * Used by TestListener to embed images directly in the ExtentReport.
+     * Used by TestListener to embed images directly in the TestNG reporter output.
      *
      * @return PNG bytes, or an empty array on failure
      */

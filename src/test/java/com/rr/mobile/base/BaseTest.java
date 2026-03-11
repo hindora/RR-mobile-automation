@@ -1,10 +1,8 @@
 package com.rr.mobile.base;
 
-import com.aventstack.extentreports.ExtentTest;
 import com.rr.mobile.driver.DriverFactory;
 import com.rr.mobile.driver.DriverManager;
 import com.rr.mobile.listeners.TestListener;
-import com.rr.mobile.reporting.ExtentReportManager;
 import io.appium.java_client.android.AndroidDriver;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -58,22 +56,10 @@ public abstract class BaseTest {
     // ---------------------------------------------------------------
 
     /**
-     * Returns the ExtentTest node for the current test so individual test
-     * methods can add custom log entries.
-     */
-    protected ExtentTest getExtentTest() {
-        return ExtentReportManager.getTest();
-    }
-
-    /**
-     * Logs an atomic test step both to Log4j and to the ExtentReport node.
+     * Logs a test step to Log4j.
      */
     protected void logStep(String description) {
         log.info("  STEP: {}", description);
-        ExtentTest test = ExtentReportManager.getTest();
-        if (test != null) {
-            test.info(description);
-        }
     }
 
     // ---------------------------------------------------------------

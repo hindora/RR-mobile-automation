@@ -152,15 +152,6 @@ pipeline {
                 junit allowEmptyResults: true,
                       testResults: 'target/surefire-reports/junitreports/*.xml'
 
-                // ExtentReports HTML (filename includes timestamp, so use wildcard)
-                publishHTML([
-                    allowMissing:          true,
-                    alwaysLinkToLastBuild: true,
-                    keepAll:               true,
-                    reportDir:             'test-output/reports',
-                    reportFiles:           '*.html',
-                    reportName:            'Extent Test Report'
-                ])
             }
         }
     }
@@ -210,7 +201,6 @@ pipeline {
   <ul>
     <li><a href="${env.BUILD_URL}">Build Console</a></li>
     <li><a href="${env.BUILD_URL}testReport/">Test Report</a></li>
-    <li><a href="${env.BUILD_URL}Extent_Test_Report/">Extent HTML Report</a></li>
   </ul>
 
   <p style="color:#888;font-size:12px;">This email was generated automatically by Jenkins.</p>
@@ -222,7 +212,6 @@ pipeline {
                         body:               body,
                         mimeType:           'text/html',
                         to:                 params.EMAIL_RECIPIENTS,
-                        attachmentsPattern: 'test-output/reports/*.html',
                         attachLog:          false
                     )
                 }
@@ -241,7 +230,7 @@ pipeline {
         }
 
         failure {
-            echo 'Tests failed — check the Extent Report and screenshots above.'
+            echo 'Tests failed — check the screenshots and TestNG report above.'
         }
     }
 }
