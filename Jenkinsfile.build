@@ -1,5 +1,5 @@
 // ============================================================
-// Job 1 — RR-Build
+// Job 1 — RR-Mobile-Build
 //
 // Purpose : Triggered on every Git push.  Compiles the project,
 //           packages all compiled classes + dependencies, and
@@ -7,7 +7,7 @@
 //           specific, immutable build without re-compiling.
 //
 // Jenkins setup:
-//   • Create a Pipeline job named exactly  "RR-Build"
+//   • Create a Pipeline job named exactly  "RR-Mobile-Build"
 //   • Set "Pipeline script from SCM", point to this repo,
 //     set Script Path = Jenkinsfile.build
 //   • Enable "GitHub hook trigger for GITScm polling"
