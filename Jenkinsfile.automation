@@ -198,6 +198,15 @@ pipeline {
         // remove -o — Maven will resolve from the network instead.
         // ----------------------------------------------------------
             steps {
+                // Clean previous Allure results so each build reports only its own run
+                script {
+                    if (isUnix()) {
+                        sh 'rm -rf allure-results'
+                    } else {
+                        bat 'if exist allure-results rmdir /s /q allure-results'
+                    }
+                }
+
                 // catchError lets test failures mark the build UNSTABLE instead of
                 // FAILED so the Publish Reports stage always runs and results are
                 // always visible in Jenkins — even when tests fail.
@@ -262,7 +271,7 @@ pipeline {
                 allure([
                     commandline:       'allure',
                     reportBuildPolicy: 'ALWAYS',
-                    results:           [[path: 'target/allure-results']]
+                    results:           [[path: 'allure-results']]
                 ])
 
                 // ── Pass-rate threshold ───────────────────────────────────────

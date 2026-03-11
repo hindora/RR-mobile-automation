@@ -119,7 +119,7 @@
                     <suiteXmlFiles>
                         <suiteXmlFile>${project.basedir}/testng.xml</suiteXmlFile>
                     </suiteXmlFiles>
-                    <argLine>-Dfile.encoding=UTF-8 -Dallure.results.directory=${project.build.directory}/allure-results</argLine>
+                    <argLine>-Dfile.encoding=UTF-8</argLine>
                     <!-- Fork per test class for true parallel isolation -->
                     <forkCount>2</forkCount>
                     <reuseForks>true</reuseForks>
@@ -130,9 +130,6 @@
                 <groupId>io.qameta.allure</groupId>
                 <artifactId>allure-maven</artifactId>
                 <version>2.12.0</version>
-                <configuration>
-                    <resultsDirectory>${project.build.directory}/allure-results</resultsDirectory>
-                </configuration>
             </plugin>
         </plugins>
 
