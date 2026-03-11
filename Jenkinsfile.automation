@@ -253,8 +253,20 @@ pipeline {
                       testResults:       'target/surefire-reports/junitreports/*.xml'
 
                 // ── ExtentReports HTML ────────────────────────────────────────
-                // Beautiful dark-themed HTML report with screenshots on failure,
-                // system info, and per-test log. Link appears in the left sidebar.
+                // Relax Jenkins CSP so the self-contained (offline-mode) Extent
+                // HTML report renders its inline scripts, styles, and base64
+                // screenshots correctly.  The property resets on Jenkins restart
+                // so we re-apply it each run.
+                script {
+                    System.setProperty(
+                        'hudson.model.DirectoryBrowserSupport.CSP',
+                        "default-src 'self'; " +
+                        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+                        "style-src  'self' 'unsafe-inline'; " +
+                        "img-src    'self' data: blob:; " +
+                        "font-src   'self' data:;"
+                    )
+                }
                 publishHTML([
                     allowMissing:          true,
                     alwaysLinkToLastBuild: true,
