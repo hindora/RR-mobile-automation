@@ -96,45 +96,34 @@ pipeline {
         // No git checkout, no Maven compile happens here.
         // ----------------------------------------------------------
             steps {
+                // Extract and store the build number before copyArtifact runs.
                 script {
-                    // Determine which build to copy from.
-                    // params.BUILD_SELECTOR is null when the run-parameter dropdown
-                    // has no builds yet — fall back to lastSuccessful() in that case.
-                    def selector
-                    if (params.BUILD_SELECTOR) {
-                        // Value looks like: "http://jenkins/job/RR-Mobile-Builds/5/"
-                        // Strip trailing slash, take the last path segment as build number.
-                        def pickedNumber = params.BUILD_SELECTOR
-                                               .replaceAll('/+$', '')
-                                               .tokenize('/')
-                                               .last()
-                        selector = specific(pickedNumber)
-                    } else {
-                        selector = lastSuccessful()
+                    if (!params.BUILD_SELECTOR) {
+                        error 'No build selected. Click "Build with Parameters" and choose a build from the BUILD_SELECTOR dropdown.'
                     }
+                    // params.BUILD_SELECTOR = "http://jenkins/job/RR-Mobile-Builds/2/"
+                    // Strip trailing slash, take the last path segment as the build number.
+                    env.SOURCE_BUILD_NUMBER = params.BUILD_SELECTOR
+                                                 .replaceAll('/+$', '')
+                                                 .tokenize('/')
+                                                 .last()
+                }
 
-                    copyArtifact(
-                        projectName:          'RR-Mobile-Builds',
-                        selector:             selector,
-                        filter:               [
-                            'target/classes/**',
-                            'target/test-classes/**',
-                            'target/dependency/**',
-                            'pom.xml',
-                            'testng.xml',
-                            'src/test/resources/**'
-                        ].join(','),
-                        fingerprintArtifacts: true,
-                        // Preserve directory structure exactly as archived by Job 1.
-                        flatten:              false
-                    )
+                // copyArtifact is a Declarative Pipeline step — it must be called
+                // directly inside steps{} and NOT inside a script{} block.
+                copyArtifact(
+                    projectName:          'RR-Mobile-Builds',
+                    selector:             specific(env.SOURCE_BUILD_NUMBER),
+                    filter:               'target/classes/**,target/test-classes/**,target/dependency/**,pom.xml,testng.xml,src/test/resources/**',
+                    fingerprintArtifacts: true,
+                    flatten:              false
+                )
 
-                    // The Copy Artifact plugin sets this env var to the actual build
-                    // number that was copied — use it so "last successful" resolves
-                    // to a real number in the display name and email.
-                    def actualBuild = env.COPYARTIFACT_BUILD_NUMBER_RR_Mobile_Builds ?: 'unknown'
+                script {
+                    // COPYARTIFACT_BUILD_NUMBER_RR_Mobile_Builds is set by the plugin
+                    // with the actual build number resolved (useful for lastSuccessful).
+                    def actualBuild = env.COPYARTIFACT_BUILD_NUMBER_RR_Mobile_Builds ?: env.SOURCE_BUILD_NUMBER
                     env.SOURCE_BUILD_NUMBER = actualBuild
-
                     currentBuild.displayName = "#${env.BUILD_NUMBER} \u2190 RR-Mobile-Builds #${actualBuild}"
                     currentBuild.description  = "Testing artifacts from RR-Mobile-Builds #${actualBuild}"
                     echo "Artifacts copied from RR-Mobile-Builds #${actualBuild}"
