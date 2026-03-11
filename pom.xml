@@ -21,6 +21,7 @@
         <!-- Dependency Versions -->
         <appium.java.client.version>8.6.0</appium.java.client.version>
         <testng.version>7.9.0</testng.version>
+        <allure.version>2.27.0</allure.version>
         <log4j.version>2.22.1</log4j.version>
         <jackson.version>2.16.1</jackson.version>
         <commons.io.version>2.15.1</commons.io.version>
@@ -50,6 +51,13 @@
             <groupId>org.testng</groupId>
             <artifactId>testng</artifactId>
             <version>${testng.version}</version>
+        </dependency>
+
+        <!-- Allure TestNG -->
+        <dependency>
+            <groupId>io.qameta.allure</groupId>
+            <artifactId>allure-testng</artifactId>
+            <version>${allure.version}</version>
         </dependency>
 
         <!-- Log4j2 API -->
@@ -111,10 +119,19 @@
                     <suiteXmlFiles>
                         <suiteXmlFile>${project.basedir}/testng.xml</suiteXmlFile>
                     </suiteXmlFiles>
-                    <argLine>-Dfile.encoding=UTF-8</argLine>
+                    <argLine>-Dfile.encoding=UTF-8 -Dallure.results.directory=${project.build.directory}/allure-results</argLine>
                     <!-- Fork per test class for true parallel isolation -->
                     <forkCount>2</forkCount>
                     <reuseForks>true</reuseForks>
+                </configuration>
+            </plugin>
+            <!-- Allure Maven Plugin (generate report locally: mvn allure:report) -->
+            <plugin>
+                <groupId>io.qameta.allure</groupId>
+                <artifactId>allure-maven</artifactId>
+                <version>2.12.0</version>
+                <configuration>
+                    <resultsDirectory>${project.build.directory}/allure-results</resultsDirectory>
                 </configuration>
             </plugin>
         </plugins>

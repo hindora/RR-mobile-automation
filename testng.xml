@@ -11,6 +11,7 @@
 
     <listeners>
         <listener class-name="com.rr.mobile.listeners.TestListener"/>
+        <listener class-name="io.qameta.allure.testng.AllureTestNg"/>
     </listeners>
 
     <!-- ============================================================

@@ -152,6 +152,12 @@ pipeline {
                 junit allowEmptyResults: true,
                       testResults: 'target/surefire-reports/junitreports/*.xml'
 
+                // Allure Report (requires "Allure" Jenkins plugin)
+                allure([
+                    reportBuildPolicy: 'ALWAYS',
+                    results:           [[path: 'target/allure-results']]
+                ])
+
             }
         }
     }
@@ -200,7 +206,8 @@ pipeline {
   <h3>Links</h3>
   <ul>
     <li><a href="${env.BUILD_URL}">Build Console</a></li>
-    <li><a href="${env.BUILD_URL}testReport/">Test Report</a></li>
+    <li><a href="${env.BUILD_URL}testReport/">TestNG Report</a></li>
+    <li><a href="${env.BUILD_URL}allure/">Allure Report</a></li>
   </ul>
 
   <p style="color:#888;font-size:12px;">This email was generated automatically by Jenkins.</p>

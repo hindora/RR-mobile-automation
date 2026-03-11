@@ -3,6 +3,7 @@ package com.rr.mobile.base;
 import com.rr.mobile.driver.DriverFactory;
 import com.rr.mobile.driver.DriverManager;
 import com.rr.mobile.listeners.TestListener;
+import io.qameta.allure.Allure;
 import io.appium.java_client.android.AndroidDriver;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -60,6 +61,7 @@ public abstract class BaseTest {
      */
     protected void logStep(String description) {
         log.info("  STEP: {}", description);
+        Allure.step(description);
     }
 
     // ---------------------------------------------------------------
