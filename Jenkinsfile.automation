@@ -2,7 +2,7 @@
 // Job 2 — RR-Mobile-Automation
 //
 // Purpose : Manual-only job.  The user picks a specific build
-//           from Job 1 (RR-Mobile-Build), copies its pre-compiled
+//           from Job 1 (RR-Mobile-Builds), copies its pre-compiled
 //           artifacts, then runs the full Appium / TestNG suite
 //           against a real Android device — without rebuilding
 //           the project from source.
@@ -12,7 +12,7 @@
 //       Manage Jenkins → Plugins → Available → Copy Artifact
 //   • Create a Pipeline job named  "RR-Mobile-Automation"
 //   • Set "Pipeline script from SCM", Script Path = Jenkinsfile.automation
-//   • In the RR-Mobile-Build job → Configure → enable
+//   • In the RR-Mobile-Builds job → Configure → enable
 //       "Allow builds to copy artifacts from this project"
 //   • No trigger — manual execution only.
 // ============================================================
@@ -26,12 +26,12 @@ pipeline {
     parameters {
 
         // "run" is a native Jenkins parameter type — no extra plugin needed.
-        // It renders a dropdown listing all builds from RR-Mobile-Build.
+        // It renders a dropdown listing all builds from RR-Mobile-Builds.
         // params.BUILD_SELECTOR resolves to the full URL of the chosen build,
-        // e.g. http://jenkins/job/RR-Mobile-Build/5/
+        // e.g. http://jenkins/job/RR-Mobile-Builds/5/
         run(
             name:        'BUILD_SELECTOR',
-            description: 'Select the RR-Mobile-Build build whose artifacts you want to run tests against.',
+            description: 'Select the RR-Mobile-Builds build whose artifacts you want to run tests against.',
             projectName: 'RR-Mobile-Builds'
         )
 
@@ -92,7 +92,7 @@ pipeline {
         // Extracts the build number from the "run" parameter URL, then
         // uses the Copy Artifact plugin to fetch the compiled classes,
         // dependency JARs, POM, suite descriptor, and test resources
-        // from that exact RR-Mobile-Build build.
+        // from that exact RR-Mobile-Builds build.
         // No git checkout, no Maven compile happens here.
         // ----------------------------------------------------------
             steps {
@@ -102,7 +102,7 @@ pipeline {
                     // has no builds yet — fall back to lastSuccessful() in that case.
                     def selector
                     if (params.BUILD_SELECTOR) {
-                        // Value looks like: "http://jenkins/job/RR-Mobile-Build/5/"
+                        // Value looks like: "http://jenkins/job/RR-Mobile-Builds/5/"
                         // Strip trailing slash, take the last path segment as build number.
                         def pickedNumber = params.BUILD_SELECTOR
                                                .replaceAll('/+$', '')
@@ -114,7 +114,7 @@ pipeline {
                     }
 
                     copyArtifact(
-                        projectName:          'RR-Mobile-Build',
+                        projectName:          'RR-Mobile-Builds',
                         selector:             selector,
                         filter:               [
                             'target/classes/**',
@@ -135,9 +135,9 @@ pipeline {
                     def actualBuild = env.COPYARTIFACT_BUILD_NUMBER_RR_Mobile_Build ?: 'unknown'
                     env.SOURCE_BUILD_NUMBER = actualBuild
 
-                    currentBuild.displayName = "#${env.BUILD_NUMBER} \u2190 RR-Mobile-Build #${actualBuild}"
-                    currentBuild.description  = "Testing artifacts from RR-Mobile-Build #${actualBuild}"
-                    echo "Artifacts copied from RR-Mobile-Build #${actualBuild}"
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} \u2190 RR-Mobile-Builds #${actualBuild}"
+                    currentBuild.description  = "Testing artifacts from RR-Mobile-Builds #${actualBuild}"
+                    echo "Artifacts copied from RR-Mobile-Builds #${actualBuild}"
                 }
             }
         }
@@ -270,7 +270,7 @@ pipeline {
                     def sourceBuild  = env.SOURCE_BUILD_NUMBER ?: 'N/A'
 
                     emailext(
-                        subject:            "[Jenkins] RR Mobile Automation \u2014 ${buildStatus} \u2014 Build #${env.BUILD_NUMBER} (artifacts from RR-Mobile-Build #${sourceBuild})",
+                        subject:            "[Jenkins] RR Mobile Automation \u2014 ${buildStatus} \u2014 Build #${env.BUILD_NUMBER} (artifacts from RR-Mobile-Builds #${sourceBuild})",
                         mimeType:           'text/html',
                         to:                 params.EMAIL_RECIPIENTS,
                         attachmentsPattern: 'test-output/reports/*.html',
@@ -281,7 +281,7 @@ pipeline {
   <h2 style="color:${statusColour};">RR Mobile Automation \u2014 ${buildStatus}</h2>
   <table border="0" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">
     <tr><td><b>Automation Job</b></td><td>${env.JOB_NAME} #${env.BUILD_NUMBER}</td></tr>
-    <tr><td><b>Artifacts from</b></td><td>RR-Mobile-Build #${sourceBuild}</td></tr>
+    <tr><td><b>Artifacts from</b></td><td>RR-Mobile-Builds #${sourceBuild}</td></tr>
     <tr><td><b>Duration</b></td><td>${currentBuild.durationString}</td></tr>
     <tr><td><b>Device</b></td><td>${params.DEVICE_NAME} (${params.DEVICE_UDID})</td></tr>
     <tr><td><b>Platform</b></td><td>Android ${params.PLATFORM_VERSION}</td></tr>
