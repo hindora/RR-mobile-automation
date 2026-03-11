@@ -274,17 +274,11 @@ pipeline {
                     results:           [[path: 'allure-results']]
                 ])
 
-                // ── Pass-rate threshold ───────────────────────────────────────
-                // Override the build result based on the 80% pass-rate rule:
-                //   pass rate ≥ 80%  →  SUCCESS
-                //   pass rate < 80%  →  UNSTABLE
-                // This runs after testNG/junit have already set UNSTABLE so that
-                // a mostly-green run is not penalised for a small number of
-                // failures.
+                // ── Build status icon based on pass rate ─────────────────────
+                //   100%        →  SUCCESS  (green  🟢)
+                //   ≥ 80% < 100% →  UNSTABLE (yellow 🟡)
+                //   < 80%        →  FAILURE  (red    🔴)
                 script {
-                    // XmlSlurper is blocked by the Jenkins Groovy Sandbox.
-                    // Read the root element attributes with regex instead — no
-                    // new class instantiation required, always sandbox-safe.
                     def xmlFile = 'target/surefire-reports/testng-results.xml'
                     if (fileExists(xmlFile)) {
                         def content       = readFile(xmlFile)
@@ -296,18 +290,21 @@ pipeline {
                             if (total > 0) {
                                 double passRate = (passed * 100.0) / total
                                 String pct = String.format('%.1f', passRate)
-                                // Store for use in the email and build description
                                 env.TEST_PASS_RATE = "${pct}%"
                                 env.TEST_SUMMARY   = "${passed} passed / ${total - passed} failed / ${total} total"
-                                if (passRate >= 80.0) {
+                                if (passed == total) {
                                     currentBuild.result = 'SUCCESS'
-                                    echo "Pass rate ${pct}% (${passed}/${total}) ≥ 80% — build SUCCESS"
-                                } else {
+                                    echo "Pass rate ${pct}% (${passed}/${total}) — all tests passed → SUCCESS 🟢"
+                                } else if (passRate >= 80.0) {
                                     currentBuild.result = 'UNSTABLE'
-                                    echo "Pass rate ${pct}% (${passed}/${total}) < 80% — build UNSTABLE"
+                                    echo "Pass rate ${pct}% (${passed}/${total}) ≥ 80% but not 100% → UNSTABLE 🟡"
+                                } else {
+                                    currentBuild.result = 'FAILURE'
+                                    echo "Pass rate ${pct}% (${passed}/${total}) < 80% → FAILURE 🔴"
                                 }
+                                currentBuild.description = "Pass rate: ${pct}% (${env.TEST_SUMMARY})"
                             } else {
-                                echo 'No tests in testng-results.xml — build result unchanged.'
+                                echo 'No tests found in testng-results.xml — build result unchanged.'
                             }
                         }
                     } else {
@@ -335,15 +332,14 @@ pipeline {
                 // Send an HTML email report when a recipient list is provided.
                 if (params.EMAIL_RECIPIENTS?.trim()) {
                     def buildStatus  = currentBuild.currentResult ?: 'UNKNOWN'
-                    def statusColour = buildStatus == 'SUCCESS'
-                        ? '#2ecc71'
-                        : (buildStatus == 'UNSTABLE' ? '#f39c12' : '#e74c3c')
+                    def statusColour = buildStatus == 'SUCCESS'  ? '#2ecc71'
+                                     : buildStatus == 'UNSTABLE' ? '#f39c12' : '#e74c3c'
                     def sourceBuild  = env.SOURCE_BUILD_NUMBER ?: 'N/A'
 
                     def passRate   = env.TEST_PASS_RATE ?: 'N/A'
                     def summary    = env.TEST_SUMMARY   ?: 'N/A'
-                    def rateColour = buildStatus == 'SUCCESS' ? '#2ecc71'
-                                   : (buildStatus == 'UNSTABLE' ? '#f39c12' : '#e74c3c')
+                    def rateColour = buildStatus == 'SUCCESS'  ? '#2ecc71'
+                                   : buildStatus == 'UNSTABLE' ? '#f39c12' : '#e74c3c'
 
                     emailext(
                         subject:            "[Jenkins] RR Mobile Automation \u2014 ${buildStatus} \u2014 Build #${env.BUILD_NUMBER} (artifacts from RR-Mobile-Builds #${sourceBuild})",
@@ -383,11 +379,15 @@ pipeline {
         }
 
         success {
-            echo 'All tests passed.'
+            echo 'Pass rate 100% — all tests passed.'
+        }
+
+        unstable {
+            echo 'Pass rate ≥ 80% but not 100% — check the Allure report for failed tests.'
         }
 
         failure {
-            echo 'Tests failed — check the screenshots and TestNG report above.'
+            echo 'Pass rate < 80% or build error — check the Allure report and console log.'
         }
     }
 }
