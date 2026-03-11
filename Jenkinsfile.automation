@@ -239,13 +239,11 @@ pipeline {
                     escapeTestDescp:              false,
                     escapeExceptionMsg:           false,
                     // Include failed builds in the TestNG trend graph
-                    showFailedBuilds:             true,
-                    // Don't mark UNSTABLE just because tests were skipped
-                    unstableSkips:                false,
-                    // Mark build UNSTABLE (not FAILED) when tests fail —
-                    // keeps the pipeline non-blocking for further reporting
-                    failedFails:                  1,
-                    unstableFails:                0
+                    showFailedBuilds:  true,
+                    // 0 failures allowed before UNSTABLE (any failure = UNSTABLE)
+                    unstableFails:     0,
+                    // Hard FAILED only if threshold exceeded (set high to keep non-blocking)
+                    failedFails:       100
                 )
 
                 // ── JUnit XML ────────────────────────────────────────────────
