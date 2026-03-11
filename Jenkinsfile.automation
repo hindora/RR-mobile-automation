@@ -279,6 +279,9 @@ pipeline {
                             if (total > 0) {
                                 double passRate = (passed * 100.0) / total
                                 String pct = String.format('%.1f', passRate)
+                                // Store for use in the email and build description
+                                env.TEST_PASS_RATE = "${pct}%"
+                                env.TEST_SUMMARY   = "${passed} passed / ${total - passed} failed / ${total} total"
                                 if (passRate >= 80.0) {
                                     currentBuild.result = 'SUCCESS'
                                     echo "Pass rate ${pct}% (${passed}/${total}) ≥ 80% — build SUCCESS"
@@ -296,20 +299,26 @@ pipeline {
                 }
 
                 // ── ExtentReports HTML ────────────────────────────────────────
-                // NOTE: System.setProperty() is blocked by the Jenkins Groovy
-                // Sandbox and cannot be called from a pipeline script.
-                // To allow the Extent HTML report to render its inline scripts
-                // and styles, a Jenkins administrator must run this ONCE in:
-                //   Manage Jenkins → Script Console:
+                // Relax Jenkins CSP so the offline-mode Extent report can render
+                // its inline scripts, styles, and base64 screenshots.
                 //
-                //   System.setProperty(
-                //     "hudson.model.DirectoryBrowserSupport.CSP",
-                //     "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:;"
-                //   )
+                // REQUIRED ONE-TIME SETUP:
+                //   Manage Jenkins → In-process Script Approval → approve:
+                //   "staticMethod java.lang.System setProperty java.lang.String java.lang.String"
                 //
-                // For a permanent fix across Jenkins restarts, add the same
-                // value to Jenkins → Configure System → JVM Options (JAVA_OPTS):
-                //   -Dhudson.model.DirectoryBrowserSupport.CSP="..."
+                // For a permanent fix that survives Jenkins restarts, also add
+                // to Jenkins JVM options (jenkins.xml / JAVA_OPTS):
+                //   -Dhudson.model.DirectoryBrowserSupport.CSP="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:;"
+                script {
+                    System.setProperty(
+                        'hudson.model.DirectoryBrowserSupport.CSP',
+                        "default-src 'self'; " +
+                        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+                        "style-src  'self' 'unsafe-inline'; " +
+                        "img-src    'self' data: blob:; " +
+                        "font-src   'self' data:;"
+                    )
+                }
                 publishHTML([
                     allowMissing:          true,
                     alwaysLinkToLastBuild: true,
@@ -343,6 +352,11 @@ pipeline {
                         : (buildStatus == 'UNSTABLE' ? '#f39c12' : '#e74c3c')
                     def sourceBuild  = env.SOURCE_BUILD_NUMBER ?: 'N/A'
 
+                    def passRate   = env.TEST_PASS_RATE ?: 'N/A'
+                    def summary    = env.TEST_SUMMARY   ?: 'N/A'
+                    def rateColour = buildStatus == 'SUCCESS' ? '#2ecc71'
+                                   : (buildStatus == 'UNSTABLE' ? '#f39c12' : '#e74c3c')
+
                     emailext(
                         subject:            "[Jenkins] RR Mobile Automation \u2014 ${buildStatus} \u2014 Build #${env.BUILD_NUMBER} (artifacts from RR-Mobile-Builds #${sourceBuild})",
                         mimeType:           'text/html',
@@ -356,6 +370,7 @@ pipeline {
   <table border="0" cellpadding="6" cellspacing="0" style="border-collapse:collapse;">
     <tr><td><b>Automation Job</b></td><td>${env.JOB_NAME} #${env.BUILD_NUMBER}</td></tr>
     <tr><td><b>Artifacts from</b></td><td>RR-Mobile-Builds #${sourceBuild}</td></tr>
+    <tr><td><b>Pass Rate</b></td><td><b style="color:${rateColour};font-size:16px;">${passRate}</b>&nbsp;&nbsp;<span style="color:#666;">(${summary})</span></td></tr>
     <tr><td><b>Duration</b></td><td>${currentBuild.durationString}</td></tr>
     <tr><td><b>Device</b></td><td>${params.DEVICE_NAME} (${params.DEVICE_UDID})</td></tr>
     <tr><td><b>Platform</b></td><td>Android ${params.PLATFORM_VERSION}</td></tr>
