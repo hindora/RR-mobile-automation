@@ -124,9 +124,14 @@ pipeline {
                 )
 
                 script {
-                    // Jenkins EnvVars.toEnvName() uppercases the job name, so the plugin
-                    // sets COPYARTIFACT_BUILD_NUMBER_RR_MOBILE_BUILDS (all caps).
-                    def actualBuild = env.COPYARTIFACT_BUILD_NUMBER_RR_MOBILE_BUILDS ?: env.SOURCE_BUILD_NUMBER
+                    // The Copy Artifact plugin injects COPYARTIFACT_BUILD_NUMBER_RR_MOBILE_BUILDS
+                    // into the Windows process environment but it is not always
+                    // visible via Groovy env.*. Read it directly from the shell.
+                    def rawNum = bat(returnStdout: true,
+                                     script: '@echo %COPYARTIFACT_BUILD_NUMBER_RR_MOBILE_BUILDS%').trim()
+                    // If undefined, Windows expands %VAR% literally — not a number
+                    def actualBuild = (rawNum =~ /^\d+$/).asBoolean() ? rawNum
+                                      : (env.SOURCE_BUILD_NUMBER ?: 'unknown')
                     env.SOURCE_BUILD_NUMBER = actualBuild
                     currentBuild.displayName = "#${env.BUILD_NUMBER} \u2190 RR-Mobile-Builds #${actualBuild}"
                     currentBuild.description  = "Testing artifacts from RR-Mobile-Builds #${actualBuild}"
@@ -291,20 +296,20 @@ pipeline {
                 }
 
                 // ── ExtentReports HTML ────────────────────────────────────────
-                // Relax Jenkins CSP so the self-contained (offline-mode) Extent
-                // HTML report renders its inline scripts, styles, and base64
-                // screenshots correctly.  The property resets on Jenkins restart
-                // so we re-apply it each run.
-                script {
-                    System.setProperty(
-                        'hudson.model.DirectoryBrowserSupport.CSP',
-                        "default-src 'self'; " +
-                        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-                        "style-src  'self' 'unsafe-inline'; " +
-                        "img-src    'self' data: blob:; " +
-                        "font-src   'self' data:;"
-                    )
-                }
+                // NOTE: System.setProperty() is blocked by the Jenkins Groovy
+                // Sandbox and cannot be called from a pipeline script.
+                // To allow the Extent HTML report to render its inline scripts
+                // and styles, a Jenkins administrator must run this ONCE in:
+                //   Manage Jenkins → Script Console:
+                //
+                //   System.setProperty(
+                //     "hudson.model.DirectoryBrowserSupport.CSP",
+                //     "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:;"
+                //   )
+                //
+                // For a permanent fix across Jenkins restarts, add the same
+                // value to Jenkins → Configure System → JVM Options (JAVA_OPTS):
+                //   -Dhudson.model.DirectoryBrowserSupport.CSP="..."
                 publishHTML([
                     allowMissing:          true,
                     alwaysLinkToLastBuild: true,
