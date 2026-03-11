@@ -238,10 +238,10 @@ pipeline {
                     // Render HTML tags in test descriptions and exception messages
                     escapeTestDescp:              false,
                     escapeExceptionMsg:           false,
-                    // Show red bars for failed builds in the trend graph
-                    showFailedBuildsInTrendGraph: true,
+                    // Include failed builds in the TestNG trend graph
+                    showFailedBuilds:             true,
                     // Don't mark UNSTABLE just because tests were skipped
-                    unstableOnSkippedTests:       false,
+                    unstableSkips:                false,
                     // Mark build UNSTABLE (not FAILED) when tests fail —
                     // keeps the pipeline non-blocking for further reporting
                     failedFails:                  1,
