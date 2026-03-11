@@ -26,15 +26,13 @@ pipeline {
     parameters {
 
         // "run" is a native Jenkins parameter type — no extra plugin needed.
-        // It renders a dropdown listing real builds from RR-Mobile-Build,
-        // filtered to SUCCESS only, so testers can only pick a green build.
+        // It renders a dropdown listing all builds from RR-Mobile-Build.
         // params.BUILD_SELECTOR resolves to the full URL of the chosen build,
         // e.g. http://jenkins/job/RR-Mobile-Build/5/
         run(
             name:        'BUILD_SELECTOR',
             description: 'Select the RR-Mobile-Build build whose artifacts you want to run tests against.',
-            projectName: 'RR-Mobile-Build',
-            filter:      'SUCCESS'
+            projectName: 'RR-Mobile-Build'
         )
 
         string(
