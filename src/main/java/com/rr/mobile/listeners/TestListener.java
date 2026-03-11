@@ -14,6 +14,7 @@ import org.testng.ITestResult;
 import org.testng.Reporter;
 
 import java.util.Base64;
+import java.util.Collection;
 
 /**
  * TestNG listener wired into testng.xml and @Listeners on BaseTest.
@@ -39,12 +40,45 @@ public class TestListener implements ITestListener {
 
     @Override
     public void onFinish(ITestContext context) {
-        log.info("====== Suite finished: {} | Passed: {} | Failed: {} | Skipped: {} ======",
-            context.getName(),
-            context.getPassedTests().size(),
-            context.getFailedTests().size(),
-            context.getSkippedTests().size());
+        int passed  = context.getPassedTests().size();
+        int failed  = context.getFailedTests().size();
+        int skipped = context.getSkippedTests().size();
+        int total   = passed + failed + skipped;
+        String passRate = total > 0
+            ? String.format("%.1f%%", (passed * 100.0) / total)
+            : "N/A";
+
+        log.info("====== Suite finished: {} | Passed: {} | Failed: {} | Skipped: {} | Pass Rate: {} ======",
+            context.getName(), passed, failed, skipped, passRate);
+
+        // Populate the "Environment" table in ExtentReports with suite-level stats
+        ExtentReportManager.getInstance().setSystemInfo("Pass Rate",   passRate);
+        ExtentReportManager.getInstance().setSystemInfo("Passed",      String.valueOf(passed));
+        ExtentReportManager.getInstance().setSystemInfo("Failed",      String.valueOf(failed));
+        ExtentReportManager.getInstance().setSystemInfo("Skipped",     String.valueOf(skipped));
+        ExtentReportManager.getInstance().setSystemInfo("Total Tests", String.valueOf(total));
         ExtentReportManager.flushReport();
+
+        // Inject pass-rate summary into every test result's reporter output so it
+        // appears on the Jenkins TestNG Results plugin method-detail page.
+        String colour  = failed == 0 ? "#2ecc71"
+                       : (total > 0 && (passed * 100.0 / total) >= 80.0) ? "#f39c12" : "#e74c3c";
+        String summary =
+            "<hr style='border:1px solid #ccc;'/>" +
+            "<table style='font-size:13px;border-collapse:collapse;'>" +
+            "<tr><td style='padding:2px 8px;'><b>Suite Pass Rate</b></td>" +
+            "<td style='padding:2px 8px;color:" + colour + ";font-weight:bold;font-size:15px;'>" + passRate + "</td></tr>" +
+            "<tr><td style='padding:2px 8px;color:#2ecc71;'>&#10003; Passed</td><td style='padding:2px 8px;'>" + passed  + "</td></tr>" +
+            "<tr><td style='padding:2px 8px;color:#e74c3c;'>&#10007; Failed</td><td style='padding:2px 8px;'>" + failed  + "</td></tr>" +
+            "<tr><td style='padding:2px 8px;color:#f39c12;'>&#9702; Skipped</td><td style='padding:2px 8px;'>" + skipped + "</td></tr>" +
+            "<tr><td style='padding:2px 8px;'>Total</td><td style='padding:2px 8px;'>" + total + "</td></tr>" +
+            "</table>" +
+            "<hr style='border:1px solid #ccc;'/>";
+
+        attachSummaryToResults(context.getPassedTests().getAllResults(),  summary);
+        attachSummaryToResults(context.getFailedTests().getAllResults(),  summary);
+        attachSummaryToResults(context.getSkippedTests().getAllResults(), summary);
+        Reporter.setCurrentTestResult(null);
     }
 
     // ---------------------------------------------------------------
@@ -103,6 +137,13 @@ public class TestListener implements ITestListener {
     // ---------------------------------------------------------------
     // Private helpers
     // ---------------------------------------------------------------
+
+    private void attachSummaryToResults(Collection<ITestResult> results, String summaryHtml) {
+        for (ITestResult result : results) {
+            Reporter.setCurrentTestResult(result);
+            Reporter.log(summaryHtml, false);
+        }
+    }
 
     private void attachScreenshotToReport(ExtentTest test, String testName) {
         if (!DriverManager.isDriverActive()) {
