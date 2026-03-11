@@ -32,7 +32,7 @@ pipeline {
         run(
             name:        'BUILD_SELECTOR',
             description: 'Select the RR-Mobile-Build build whose artifacts you want to run tests against.',
-            projectName: 'RR-Mobile-Build'
+            projectName: 'RR-Mobile-Builds'
         )
 
         string(
