@@ -11,7 +11,7 @@
 
     <listeners>
         <listener class-name="com.rr.mobile.listeners.TestListener"/>
-        <listener class-name="io.qameta.allure.testng.AllureTestNg"/>
+        <!-- AllureTestNg is auto-registered via SPI — do not add here to avoid double registration -->
     </listeners>
 
     <!-- ============================================================
