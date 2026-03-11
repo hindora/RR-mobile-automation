@@ -11,6 +11,7 @@ import org.apache.logging.log4j.Logger;
 import org.testng.ITestContext;
 import org.testng.ITestListener;
 import org.testng.ITestResult;
+import org.testng.Reporter;
 
 import java.util.Base64;
 
@@ -111,8 +112,13 @@ public class TestListener implements ITestListener {
             byte[] bytes = ScreenshotUtils.captureScreenshotAsBytes();
             if (bytes.length > 0) {
                 String base64 = Base64.getEncoder().encodeToString(bytes);
+                // Attach to ExtentReports (Spark HTML report)
                 test.fail("Screenshot at failure",
                     MediaEntityBuilder.createScreenCaptureFromBase64String(base64).build());
+                // Embed in testng-results.xml so Jenkins TestNG Results plugin shows the screenshot
+                Reporter.log("<br/><b>Failure Screenshot:</b><br/>" +
+                    "<img src='data:image/png;base64," + base64 +
+                    "' style='max-width:900px;border:2px solid #e74c3c;'/><br/>", true);
             }
         } catch (Exception e) {
             log.error("Could not attach screenshot to report: {}", e.getMessage());
