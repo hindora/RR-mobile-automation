@@ -113,9 +113,9 @@ pipeline {
                     }
                 }
 
-                // copyArtifact must be called directly in steps{} (not inside script{}).
+                // copyArtifacts (plural) is the registered step name for this plugin version.
                 // selector: use specific build when one was chosen, lastSuccessful otherwise.
-                copyArtifact(
+                copyArtifacts(
                     projectName:          'RR-Mobile-Builds',
                     selector:             env.SOURCE_BUILD_NUMBER ? specific(env.SOURCE_BUILD_NUMBER) : lastSuccessful(),
                     filter:               'target/classes/**,target/test-classes/**,target/dependency/**,pom.xml,testng.xml,src/test/resources/**',
