@@ -5,10 +5,7 @@ import com.rr.mobile.utils.ScreenshotUtils;
 import io.qameta.allure.Allure;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.testng.ITestContext;
-import org.testng.ITestListener;
-import org.testng.ITestResult;
-import org.testng.Reporter;
+import org.testng.*;
 
 import java.io.ByteArrayInputStream;
 import java.util.Base64;
@@ -17,14 +14,48 @@ import java.util.Collection;
 /**
  * TestNG listener wired into testng.xml and @Listeners on BaseTest.
  *
- * Responsibilities:
- *  1. Log test lifecycle events via Log4j.
- *  2. Capture a screenshot and embed it in the TestNG reporter on failure.
- *  3. Inject a pass-rate summary into every test result at suite completion.
+ * Implements both ITestListener and IInvokedMethodListener.
+ *
+ * Screenshot strategy:
+ *   afterInvocation  → fires BEFORE AllureTestNg.onTestFailure closes the test
+ *                       case, so Allure.addAttachment() binds correctly.
+ *   onTestFailure    → reuses the captured bytes for the Jenkins TestNG reporter
+ *                       embed and saves a PNG file to test-output/screenshots/.
  */
-public class TestListener implements ITestListener {
+public class TestListener implements ITestListener, IInvokedMethodListener {
 
     private static final Logger log = LogManager.getLogger(TestListener.class);
+
+    // Holds screenshot bytes captured in afterInvocation so onTestFailure can
+    // reuse them without taking a second screenshot.
+    private static final ThreadLocal<byte[]> FAILURE_SCREENSHOT = new ThreadLocal<>();
+
+    // ---------------------------------------------------------------
+    // IInvokedMethodListener — fires before ITestListener events
+    // ---------------------------------------------------------------
+
+    @Override
+    public void beforeInvocation(IInvokedMethod method, ITestResult testResult) {
+        // no-op
+    }
+
+    @Override
+    public void afterInvocation(IInvokedMethod method, ITestResult result) {
+        if (!method.isTestMethod()) return;
+        if (result.getStatus() != ITestResult.FAILURE) return;
+        if (!DriverManager.isDriverActive()) return;
+
+        byte[] bytes = ScreenshotUtils.captureScreenshotAsBytes();
+        FAILURE_SCREENSHOT.set(bytes);
+
+        // Attach to Allure here — the AllureTestNg listener has not yet closed
+        // the test case, so the attachment is correctly bound to this test.
+        if (bytes.length > 0) {
+            Allure.addAttachment(
+                result.getMethod().getMethodName() + " - failure screenshot",
+                "image/png", new ByteArrayInputStream(bytes), "png");
+        }
+    }
 
     // ---------------------------------------------------------------
     // Suite lifecycle
@@ -49,8 +80,6 @@ public class TestListener implements ITestListener {
         log.info("====== Suite finished: {} | Passed: {} | Failed: {} | Skipped: {} | Pass Rate: {} ======",
             context.getName(), passed, failed, skipped, passRate);
 
-        // Inject pass-rate summary into every test result's reporter output so it
-        // appears on the Jenkins TestNG Results plugin method-detail page.
         String colour  = failed == 0 ? "#2ecc71"
                        : (total > 0 && (passed * 100.0 / total) >= 80.0) ? "#f39c12" : "#e74c3c";
         String summary =
@@ -91,8 +120,11 @@ public class TestListener implements ITestListener {
         log.error("---> TEST FAIL:  {} | {}", name,
             result.getThrowable() != null ? result.getThrowable().getMessage() : "unknown");
 
-        attachScreenshotToReporter(result, name);
-        attachScreenshotToAllure(name);
+        // Reuse bytes already captured in afterInvocation (Allure attachment done there)
+        byte[] bytes = FAILURE_SCREENSHOT.get();
+        FAILURE_SCREENSHOT.remove();
+
+        embedScreenshotInReporter(result, bytes);
         ScreenshotUtils.captureScreenshot(name);
     }
 
@@ -117,36 +149,16 @@ public class TestListener implements ITestListener {
         }
     }
 
-    private void attachScreenshotToAllure(String testName) {
-        if (!DriverManager.isDriverActive()) {
-            return;
-        }
+    private void embedScreenshotInReporter(ITestResult result, byte[] bytes) {
+        if (bytes == null || bytes.length == 0) return;
         try {
-            byte[] bytes = ScreenshotUtils.captureScreenshotAsBytes();
-            if (bytes.length > 0) {
-                Allure.addAttachment(testName + " - failure screenshot",
-                    "image/png", new ByteArrayInputStream(bytes), "png");
-            }
+            String base64 = Base64.getEncoder().encodeToString(bytes);
+            Reporter.setCurrentTestResult(result);
+            Reporter.log("<br/><b>Failure Screenshot:</b><br/>" +
+                "<img src='data:image/png;base64," + base64 +
+                "' style='max-width:900px;border:2px solid #e74c3c;'/><br/>", true);
         } catch (Exception e) {
-            log.error("Could not attach screenshot to Allure: {}", e.getMessage());
-        }
-    }
-
-    private void attachScreenshotToReporter(ITestResult result, String testName) {
-        if (!DriverManager.isDriverActive()) {
-            return;
-        }
-        try {
-            byte[] bytes = ScreenshotUtils.captureScreenshotAsBytes();
-            if (bytes.length > 0) {
-                String base64 = Base64.getEncoder().encodeToString(bytes);
-                Reporter.setCurrentTestResult(result);
-                Reporter.log("<br/><b>Failure Screenshot:</b><br/>" +
-                    "<img src='data:image/png;base64," + base64 +
-                    "' style='max-width:900px;border:2px solid #e74c3c;'/><br/>", true);
-            }
-        } catch (Exception e) {
-            log.error("Could not attach screenshot to reporter: {}", e.getMessage());
+            log.error("Could not embed screenshot in reporter: {}", e.getMessage());
         }
     }
 }
