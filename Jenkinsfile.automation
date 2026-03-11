@@ -96,24 +96,28 @@ pipeline {
         // No git checkout, no Maven compile happens here.
         // ----------------------------------------------------------
             steps {
-                // Extract and store the build number before copyArtifact runs.
+                // Extract the build number from the run-parameter URL when a build
+                // is selected.  If BUILD_SELECTOR is null (first run after a
+                // Jenkinsfile parameter change Jenkins doesn't pass new params yet),
+                // fall back to the last successful build automatically.
                 script {
-                    if (!params.BUILD_SELECTOR) {
-                        error 'No build selected. Click "Build with Parameters" and choose a build from the BUILD_SELECTOR dropdown.'
+                    if (params.BUILD_SELECTOR) {
+                        // e.g. "http://jenkins/job/RR-Mobile-Builds/2/"
+                        env.SOURCE_BUILD_NUMBER = params.BUILD_SELECTOR
+                                                      .replaceAll('/+$', '')
+                                                      .tokenize('/')
+                                                      .last()
+                    } else {
+                        env.SOURCE_BUILD_NUMBER = ''
+                        echo 'BUILD_SELECTOR not set — will copy from last successful build of RR-Mobile-Builds.'
                     }
-                    // params.BUILD_SELECTOR = "http://jenkins/job/RR-Mobile-Builds/2/"
-                    // Strip trailing slash, take the last path segment as the build number.
-                    env.SOURCE_BUILD_NUMBER = params.BUILD_SELECTOR
-                                                 .replaceAll('/+$', '')
-                                                 .tokenize('/')
-                                                 .last()
                 }
 
-                // copyArtifact is a Declarative Pipeline step — it must be called
-                // directly inside steps{} and NOT inside a script{} block.
+                // copyArtifact must be called directly in steps{} (not inside script{}).
+                // selector: use specific build when one was chosen, lastSuccessful otherwise.
                 copyArtifact(
                     projectName:          'RR-Mobile-Builds',
-                    selector:             specific(env.SOURCE_BUILD_NUMBER),
+                    selector:             env.SOURCE_BUILD_NUMBER ? specific(env.SOURCE_BUILD_NUMBER) : lastSuccessful(),
                     filter:               'target/classes/**,target/test-classes/**,target/dependency/**,pom.xml,testng.xml,src/test/resources/**',
                     fingerprintArtifacts: true,
                     flatten:              false
@@ -121,7 +125,7 @@ pipeline {
 
                 script {
                     // COPYARTIFACT_BUILD_NUMBER_RR_Mobile_Builds is set by the plugin
-                    // with the actual build number resolved (useful for lastSuccessful).
+                    // with the resolved build number (especially useful for lastSuccessful).
                     def actualBuild = env.COPYARTIFACT_BUILD_NUMBER_RR_Mobile_Builds ?: env.SOURCE_BUILD_NUMBER
                     env.SOURCE_BUILD_NUMBER = actualBuild
                     currentBuild.displayName = "#${env.BUILD_NUMBER} \u2190 RR-Mobile-Builds #${actualBuild}"
