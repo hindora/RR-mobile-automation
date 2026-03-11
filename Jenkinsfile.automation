@@ -258,7 +258,9 @@ pipeline {
                       testResults:       'target/surefire-reports/junitreports/*.xml'
 
                 // ── Allure Report (requires "Allure" Jenkins plugin) ─────────
+                // Commandline name must match: Manage Jenkins → Tools → Allure Commandline → Name
                 allure([
+                    commandline:       'allure',
                     reportBuildPolicy: 'ALWAYS',
                     results:           [[path: 'target/allure-results']]
                 ])
