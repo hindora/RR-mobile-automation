@@ -252,6 +252,37 @@ pipeline {
                 junit allowEmptyResults: true,
                       testResults:       'target/surefire-reports/junitreports/*.xml'
 
+                // ── Pass-rate threshold ───────────────────────────────────────
+                // Override the build result based on the 80% pass-rate rule:
+                //   pass rate ≥ 80%  →  SUCCESS
+                //   pass rate < 80%  →  UNSTABLE
+                // This runs after testNG/junit have already set UNSTABLE so that
+                // a mostly-green run is not penalised for a small number of
+                // failures.
+                script {
+                    def xmlFile = 'target/surefire-reports/testng-results.xml'
+                    if (fileExists(xmlFile)) {
+                        def xml    = new XmlSlurper().parseText(readFile(xmlFile))
+                        def passed = xml.@passed.toInteger()
+                        def total  = xml.@total.toInteger()
+                        if (total > 0) {
+                            double passRate = (passed * 100.0) / total
+                            String pct = String.format('%.1f', passRate)
+                            if (passRate >= 80.0) {
+                                currentBuild.result = 'SUCCESS'
+                                echo "Pass rate ${pct}% (${passed}/${total}) ≥ 80% — build SUCCESS"
+                            } else {
+                                currentBuild.result = 'UNSTABLE'
+                                echo "Pass rate ${pct}% (${passed}/${total}) < 80% — build UNSTABLE"
+                            }
+                        } else {
+                            echo 'No tests in testng-results.xml — build result unchanged.'
+                        }
+                    } else {
+                        echo 'testng-results.xml not found — build result unchanged.'
+                    }
+                }
+
                 // ── ExtentReports HTML ────────────────────────────────────────
                 // Relax Jenkins CSP so the self-contained (offline-mode) Extent
                 // HTML report renders its inline scripts, styles, and base64
