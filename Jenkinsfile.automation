@@ -37,7 +37,7 @@ pipeline {
 
         string(
             name:         'DEVICE_UDID',
-            defaultValue: 'adb-R5CRA1JVYWL-3TRgFc._adb-tls-connect._tcp',
+            defaultValue: '192.168.0.188:41097',
             description:  'ADB device UDID — run: adb devices'
         )
         string(
