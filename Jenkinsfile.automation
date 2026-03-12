@@ -124,12 +124,12 @@ pipeline {
                 )
 
                 script {
-                    // The Copy Artifact plugin injects COPYARTIFACT_BUILD_NUMBER_RR_MOBILE_BUILDS
-                    // into the Windows process environment but it is not always
-                    // visible via Groovy env.*. Read it directly from the shell.
-                    def rawNum = bat(returnStdout: true,
+                    // Try Groovy env first, fall back to bat echo for Windows edge cases
+                    def rawNum = env.COPYARTIFACT_BUILD_NUMBER_RR_MOBILE_BUILDS?.trim()
+                    if (!rawNum || !(rawNum =~ /^\d+$/)) {
+                        rawNum = bat(returnStdout: true,
                                      script: '@echo %COPYARTIFACT_BUILD_NUMBER_RR_MOBILE_BUILDS%').trim()
-                    // If undefined, Windows expands %VAR% literally — not a number
+                    }
                     def actualBuild = (rawNum =~ /^\d+$/).asBoolean() ? rawNum
                                       : (env.SOURCE_BUILD_NUMBER ?: 'unknown')
                     env.SOURCE_BUILD_NUMBER = actualBuild
