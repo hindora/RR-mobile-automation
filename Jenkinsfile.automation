@@ -96,45 +96,41 @@ pipeline {
         // No git checkout, no Maven compile happens here.
         // ----------------------------------------------------------
             steps {
-                // Extract the build number from the run-parameter URL when a build
-                // is selected.  If BUILD_SELECTOR is null (first run after a
-                // Jenkinsfile parameter change Jenkins doesn't pass new params yet),
-                // fall back to the last successful build automatically.
                 script {
                     if (params.BUILD_SELECTOR) {
-                        // e.g. "http://jenkins/job/RR-Mobile-Builds/2/"
+                        // Extract build number directly from the run-parameter URL.
+                        // e.g. "http://jenkins/job/RR-Mobile-Builds/6/" → "6"
                         env.SOURCE_BUILD_NUMBER = params.BUILD_SELECTOR
                                                       .replaceAll('/+$', '')
                                                       .tokenize('/')
                                                       .last()
+                        echo "Using selected build: RR-Mobile-Builds #${env.SOURCE_BUILD_NUMBER}"
                     } else {
-                        env.SOURCE_BUILD_NUMBER = ''
-                        echo 'BUILD_SELECTOR not set — will copy from last successful build of RR-Mobile-Builds.'
+                        // No build selected — resolve the last successful build number
+                        // via the Jenkins API so we always have an explicit number.
+                        def lastSuccessfulBuild = Jenkins.instance
+                                                         .getItemByFullName('RR-Mobile-Builds')
+                                                         ?.getLastSuccessfulBuild()
+                        if (!lastSuccessfulBuild) {
+                            error 'No successful build found in RR-Mobile-Builds — cannot copy artifacts.'
+                        }
+                        env.SOURCE_BUILD_NUMBER = lastSuccessfulBuild.number.toString()
+                        echo "No build selected — using last successful: RR-Mobile-Builds #${env.SOURCE_BUILD_NUMBER}"
                     }
                 }
 
-                // copyArtifacts (plural) is the registered step name for this plugin version.
-                // selector: use specific build when one was chosen, lastSuccessful otherwise.
                 copyArtifacts(
                     projectName:          'RR-Mobile-Builds',
-                    selector:             env.SOURCE_BUILD_NUMBER ? specific(env.SOURCE_BUILD_NUMBER) : lastSuccessful(),
+                    selector:             specific(env.SOURCE_BUILD_NUMBER),
                     filter:               'target/classes/**,target/test-classes/**,target/dependency/**,pom.xml,testng.xml,src/test/resources/**',
                     fingerprintArtifacts: true,
                     flatten:              false
                 )
 
                 script {
-                    // Search all env vars for COPYARTIFACT_BUILD_NUMBER regardless of exact name casing
-                    def copyArtifactVars = bat(returnStdout: true,
-                                               script: '@set | findstr /I "COPYARTIFACT_BUILD_NUMBER" & exit 0').trim()
-                    def matcher  = copyArtifactVars =~ /COPYARTIFACT_BUILD_NUMBER[^=]+=(\d+)/
-                    def rawNum   = matcher ? matcher[0][1] : ''
-                    def actualBuild = (rawNum =~ /^\d+$/).asBoolean() ? rawNum
-                                      : (env.SOURCE_BUILD_NUMBER ?: 'unknown')
-                    env.SOURCE_BUILD_NUMBER = actualBuild
-                    currentBuild.displayName = "#${env.BUILD_NUMBER} \u2190 RR-Mobile-Builds #${actualBuild}"
-                    currentBuild.description  = "Testing artifacts from RR-Mobile-Builds #${actualBuild}"
-                    echo "Artifacts copied from RR-Mobile-Builds #${actualBuild}"
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} \u2190 RR-Mobile-Builds #${env.SOURCE_BUILD_NUMBER}"
+                    currentBuild.description  = "Testing artifacts from RR-Mobile-Builds #${env.SOURCE_BUILD_NUMBER}"
+                    echo "Artifacts copied from RR-Mobile-Builds #${env.SOURCE_BUILD_NUMBER}"
                 }
             }
         }
