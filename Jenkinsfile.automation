@@ -62,7 +62,7 @@ pipeline {
         )
         string(
             name:         'EMAIL_RECIPIENTS',
-            defaultValue: '',
+            defaultValue: 'hari.indora@faberwork.com',
             description:  'Comma-separated list of email addresses to receive the test report'
         )
     }
