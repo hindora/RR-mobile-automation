@@ -126,7 +126,7 @@ pipeline {
                 script {
                     // Search all env vars for COPYARTIFACT_BUILD_NUMBER regardless of exact name casing
                     def copyArtifactVars = bat(returnStdout: true,
-                                               script: '@set | findstr /I "COPYARTIFACT_BUILD_NUMBER"').trim()
+                                               script: '@set | findstr /I "COPYARTIFACT_BUILD_NUMBER" & exit 0').trim()
                     def matcher  = copyArtifactVars =~ /COPYARTIFACT_BUILD_NUMBER[^=]+=(\d+)/
                     def rawNum   = matcher ? matcher[0][1] : ''
                     def actualBuild = (rawNum =~ /^\d+$/).asBoolean() ? rawNum
