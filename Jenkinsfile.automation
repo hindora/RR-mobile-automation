@@ -124,12 +124,11 @@ pipeline {
                 )
 
                 script {
-                    // Try Groovy env first, fall back to bat echo for Windows edge cases
-                    def rawNum = env.COPYARTIFACT_BUILD_NUMBER_RR_MOBILE_BUILDS?.trim()
-                    if (!rawNum || !(rawNum =~ /^\d+$/)) {
-                        rawNum = bat(returnStdout: true,
-                                     script: '@echo %COPYARTIFACT_BUILD_NUMBER_RR_MOBILE_BUILDS%').trim()
-                    }
+                    // Search all env vars for COPYARTIFACT_BUILD_NUMBER regardless of exact name casing
+                    def copyArtifactVars = bat(returnStdout: true,
+                                               script: '@set | findstr /I "COPYARTIFACT_BUILD_NUMBER"').trim()
+                    def matcher  = copyArtifactVars =~ /COPYARTIFACT_BUILD_NUMBER[^=]+=(\d+)/
+                    def rawNum   = matcher ? matcher[0][1] : ''
                     def actualBuild = (rawNum =~ /^\d+$/).asBoolean() ? rawNum
                                       : (env.SOURCE_BUILD_NUMBER ?: 'unknown')
                     env.SOURCE_BUILD_NUMBER = actualBuild
