@@ -154,6 +154,30 @@ pipeline {
         }
 
         // ----------------------------------------------------------
+        stage('Connect ADB Device') {
+        // ----------------------------------------------------------
+        // The DEVICE_UDID is a TCP/IP address (e.g. 192.168.0.188:41097).
+        // ADB has no knowledge of it until we explicitly connect.
+        // Run adb connect, then assert the device appears as "device" (not
+        // "offline" or "unauthorized") before we start Appium.
+        // ----------------------------------------------------------
+            steps {
+                script {
+                    bat "adb connect ${params.DEVICE_UDID}"
+                    // Give ADB a moment to finish the handshake
+                    bat 'powershell -Command "Start-Sleep -Seconds 3"'
+                    // Verify the device is listed and online
+                    def adbOut = bat(returnStdout: true,
+                                     script: "adb -s ${params.DEVICE_UDID} get-state").trim()
+                    if (!adbOut.contains('device')) {
+                        error "ADB device ${params.DEVICE_UDID} not reachable after connect. State: '${adbOut}'. Check that the phone has wireless debugging enabled and is on the same network."
+                    }
+                    echo "ADB device ${params.DEVICE_UDID} is online (state: ${adbOut})"
+                }
+            }
+        }
+
+        // ----------------------------------------------------------
         stage('Start Appium') {
         // ----------------------------------------------------------
             steps {
