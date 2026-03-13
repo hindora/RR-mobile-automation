@@ -73,7 +73,7 @@ pipeline {
     }
 
     environment {
-        PATH = "C:\\Users\\harii\\AppData\\Roaming\\npm;${env.PATH}"
+        PATH = "C:\\Users\\harii\\AppData\\Roaming\\npm;C:\\Users\\harii\\AppData\\Local\\Android\\Sdk\\platform-tools;${env.PATH}"
     }
 
     options {
