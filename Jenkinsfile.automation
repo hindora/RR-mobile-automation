@@ -63,7 +63,7 @@ pipeline {
                 )
 
                 script {
-                    currentBuild.displayName = "#${env.BUILD_NUMBER} \u2190 RR-Mobile-Builds #${env.SOURCE_BUILD_NUMBER}"
+                    currentBuild.displayName = "RR-Mobile-Automation #${env.BUILD_NUMBER} \u2190 RR-Mobile-Builds #${env.SOURCE_BUILD_NUMBER}"
                     currentBuild.description  = "Testing artifacts from RR-Mobile-Builds #${env.SOURCE_BUILD_NUMBER}"
                 }
             }
