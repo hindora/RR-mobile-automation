@@ -25,6 +25,10 @@ pipeline {
         PATH = "C:\\Users\\harii\\AppData\\Roaming\\npm;C:\\Users\\harii\\AppData\\Local\\Android\\Sdk\\platform-tools;${env.PATH}"
     }
 
+    triggers {
+        cron('0 17 * * *')
+    }
+
     options {
         timestamps()
         buildDiscarder(logRotator(numToKeepStr: '10'))
